@@ -157,5 +157,6 @@ function attemptConnect(ssid, pwd, cfg) {
 function pause() { state.pausedFlag = true; compliance.audit('TASK_PAUSE', ''); }
 function resume() { state.pausedFlag = false; compliance.audit('TASK_RESUME', ''); }
 function isPaused() { return !!state.pausedFlag; }
+function isRunning() { return state.running; }
 
 module.exports = { start, stop, pause, resume, isPaused, isRunning };
