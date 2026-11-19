@@ -127,6 +127,30 @@ function dictsList() {
     }
     return list;
 }
+function nowStr() {
+    const d = new Date();
+    const p2 = function (n) { return String(n).padStart(2, '0'); };
+    return (d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate())
+        + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()));
+}
+function pushHistory() {
+    pushEvent('history_data', { list: store.load('history.json', []) });
+}
+function addHistory(targets) {
+    const h = store.load('history.json', []);
+    h.unshift({ time: nowStr(), targets: targets, status: '运行中', hits: [] });
+    store.save('history.json', h.slice(0, 20));
+    pushHistory();
+}
+function finishHistory(success, hits, reason) {
+    const h = store.load('history.json', []);
+    if (h.length && h[0].status === '运行中') {
+        h[0].status = success ? '命中' : (reason || '未命中');
+        h[0].hits = hits || [];
+        store.save('history.json', h.slice(0, 20));
+        pushHistory();
+    }
+}
 function handleCommand(cmd, payload) {
     if (cmd === 'start_task') {
         // UI 侧白名单同步进合规层（UI 编辑以本次任务携带为准）
@@ -135,6 +159,7 @@ function handleCommand(cmd, payload) {
             compliance.audit('WHITELIST_UPDATE', payload.whitelist.join(', '));
         }
         compliance.recordAuthConfirmation();
+        addHistory((payload.targets && payload.targets.length) ? payload.targets : [payload.ssid]);
         // 悬浮窗面板：任务运行期间唯一的暂停/停止入口（屏幕会被 WLAN 设置页占用）
         const pvTargets = (payload && payload.targets && payload.targets.length)
             ? payload.targets : [payload && payload.ssid];
@@ -159,9 +184,14 @@ function handleCommand(cmd, payload) {
                         panel.update((p.target || (payload && payload.ssid) || '') + ' · ' + p.tried + '/' + p.total);
                     }
                     pushEvent('progress', p);
+                },                onHit: function (ssid) {
+                    const h = store.load('history.json', []);
+                    if (h.length && h[0].status === '运行中' && h[0].hits.indexOf(ssid) < 0) h[0].hits.push(ssid);
+                    store.save('history.json', h.slice(0, 20));
                 },
                 onDone: function (success, reason) {
                     panel.close();
+                    finishHistory(success, store.load('history.json', [])[0] ? store.load('history.json', [])[0].hits : [], reason);
                     toast('任务' + (success ? '成功' : '结束') + (reason ? '：' + reason : ''));
                     pushEvent('task_done', { success: success, reason: reason });
                 },
@@ -234,6 +264,8 @@ function handleCommand(cmd, payload) {
             files.write(dest, out);
             toast('已导出到：' + dest);
         });
+    } else if (cmd === 'get_history') {
+        pushHistory();
     } else if (cmd === 'pause_task') {
         engine.pause();
         panel.setPaused(true);

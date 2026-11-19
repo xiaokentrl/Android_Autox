@@ -114,6 +114,7 @@ function start(cfg, hooks) {
             hooks.onLog('第 ' + tried + ' 条 · 命中（' + ssid + '）', 'ok');
             compliance.audit('HIT', 'ssid=' + ssid + ' 尝试序号=' + tried);
             hitTargets.push(ssid);
+            if (hooks.onHit) hooks.onHit(ssid);
             if (!onHitContinue) { finish(true, '命中 ' + ssid); return; }
             hooks.onLog('命中后继续（按任务设置）', 'ok');
             ti++;
