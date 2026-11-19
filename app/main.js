@@ -252,7 +252,7 @@ function handleCommand(cmd, payload) {
                     .map(function (s) { return s.trim(); })
                     .filter(function (s) { return s.length > 0; });
             }
-            pushEvent('dict_entries', { name: name, entries: entries, desc: m.desc || '', enabled: m.enabled !== false });
+            pushEvent('dict_entries', { name: name, entries: entries, desc: m.desc || '', enabled: m.enabled !== false, rules: m.rules || {} });
         });
     } else if (cmd === 'save_dict') {
         threads.start(function () {
@@ -270,6 +270,7 @@ function handleCommand(cmd, payload) {
             meta[name] = {
                 enabled: payload && payload.enabled !== false,
                 desc: String(payload && payload.desc || ''),
+                rules: payload && payload.rules || {},
             };
             store.save('dictmeta.json', meta);
             compliance.audit('DICT_SAVE', name + ' 条数=' + uniq.length);

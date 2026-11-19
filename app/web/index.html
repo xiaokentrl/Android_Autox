@@ -338,6 +338,20 @@ details.card>summary+*{margin-top:10px}
         <div class="kv"><span>条数 / 去重后</span><span id="deStats">0 / 0</span></div>
       </div>
       <div class="card">
+        <div class="field"><label>保存规则（保存时按顺序执行，实时预览）</label></div>
+        <div class="rule"><input type="checkbox" id="rLower"><span class="name">大小写：全部转小写</span></div>
+        <div class="rule"><input type="checkbox" id="rLen" checked><span class="name">长度过滤</span></div>
+        <div class="grid2" id="rLenBox">
+          <div class="field"><label>最小长度</label><input type="number" id="rMin" value="8"></div>
+          <div class="field"><label>最大长度</label><input type="number" id="rMax" value="16"></div>
+        </div>
+        <div class="rule"><input type="checkbox" id="rRegex"><span class="name">正则过滤（保留匹配行）</span></div>
+        <div class="field"><input type="text" id="rRegexText" placeholder="^[a-zA-Z0-9]{8,16}$"></div>
+        <div class="rule"><input type="checkbox" id="rBlack"><span class="name">黑名单词条（逗号分隔）</span></div>
+        <div class="field"><input type="text" id="rBlackText" placeholder="admin, 123456"></div>
+        <div class="rule"><input type="checkbox" id="rSortLen"><span class="name">排序：长度升序</span></div>
+      </div>
+      <div class="card">
         <div class="field"><label>内容（每行一条，保存时自动去空行+去重）</label>
           <textarea id="deContent" style="min-height:180px" placeholder="password1&#10;password2"></textarea></div>
         <div class="btns">
@@ -975,6 +989,16 @@ window.__onNativeEvent = function(name, data){
       document.getElementById('deName').value = data.name || '';
       document.getElementById('deDesc').value = (data.desc || '');
       document.getElementById('deEnabled').checked = data.enabled !== false;
+      const r = (data.rules || {});
+      document.getElementById('rLower').checked = !!r.lower;
+      document.getElementById('rLen').checked = r.len !== false;
+      document.getElementById('rMin').value = r.min != null ? r.min : 8;
+      document.getElementById('rMax').value = r.max != null ? r.max : 16;
+      document.getElementById('rRegex').checked = !!r.regex;
+      document.getElementById('rRegexText').value = r.regex || '';
+      document.getElementById('rBlack').checked = !!(r.blacklist && r.blacklist.length);
+      document.getElementById('rBlackText').value = (r.blacklist || []).join(', ');
+      document.getElementById('rSortLen').checked = !!r.sortLen;
       document.getElementById('deContent').value = curEntries.join('\n');
       updateDeStats();
     }
@@ -1145,7 +1169,10 @@ function restoreCfg(){
     document.getElementById('homeAuth').className = 'tag ok';
   }
 }
-document.addEventListener('change', persistCfg);
+document.addEventListener('change', function(e){
+  persistCfg();
+  if(e.target && (e.target.id === 'rLower' || e.target.id === 'rLen' || e.target.id === 'rRegex' || e.target.id === 'rBlack' || e.target.id === 'rSortLen')) updateDeStats();
+});
 document.addEventListener('input', persistCfg);
 
 /* ---------- 字典管理（真实数据） ---------- */
@@ -1211,13 +1238,18 @@ function openEntries(name){
   else { renderEntries(name, ['demo0001','demo0002','demo0003']); }
 }
 function saveDictEdit(){
+  const raw = document.getElementById('deContent').value.split(/\r?\n/)
+    .map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+  const rules = collectRules();
+  const processed = applyRules(raw, rules);
   nativeSend('save_dict', {
     name: curDict,
-    content: document.getElementById('deContent').value,
+    content: processed.join('\n'),
     desc: document.getElementById('deDesc').value.trim(),
     enabled: document.getElementById('deEnabled').checked,
+    rules: rules,
   });
-  toast('已保存');
+  toast('已保存：规则后 ' + processed.length + ' 条');
   setTimeout(refreshDicts, 800);
 }
 function deleteDict(name){
@@ -1256,15 +1288,49 @@ function renderEntries(name, entries){
       + '<span class="pwd">' + escHtml(e) + '</span></div>';
   }).join('') : '<div class="wl-empty">空字典</div>';
 }
+function collectRules(){
+  return {
+    lower: document.getElementById('rLower').checked,
+    len: document.getElementById('rLen').checked,
+    min: parseInt(document.getElementById('rMin').value, 10) || 0,
+    max: parseInt(document.getElementById('rMax').value, 10) || 99,
+    regex: document.getElementById('rRegex').checked ? document.getElementById('rRegexText').value.trim() : '',
+    blacklist: document.getElementById('rBlack').checked
+      ? genList(document.getElementById('rBlackText').value) : [],
+    sortLen: document.getElementById('rSortLen').checked,
+  };
+}
+function applyRules(lines, r){
+  let out = lines.filter(function(s){ return s.length > 0; });
+  if(r.lower) out = out.map(function(s){ return s.toLowerCase(); });
+  const seen = Object.create(null);
+  out = out.filter(function(s){
+    const k = s.toLowerCase(); if(seen[k]) return false; seen[k] = 1; return true;
+  });
+  if(r.len) out = out.filter(function(s){ return s.length >= r.min && s.length <= r.max; });
+  if(r.regex){
+    let re = null;
+    try { re = new RegExp(r.regex); } catch (e) { toast('正则无效，已跳过该规则'); }
+    if(re) out = out.filter(function(s){ return re.test(s); });
+  }
+  if(r.blacklist.length){
+    const bl = r.blacklist.map(function(s){ return s.toLowerCase(); });
+    out = out.filter(function(s){ return bl.indexOf(s.toLowerCase()) < 0; });
+  }
+  if(r.sortLen) out = out.slice().sort(function(a, b){ return a.length - b.length; });
+  return out;
+}
 function updateDeStats(){
-  const v = document.getElementById('deContent').value.split(/\r?\n/)
+  const raw = document.getElementById('deContent').value.split(/\r?\n/)
     .map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
   const seen = Object.create(null); let uniq = 0;
-  v.forEach(function(x){ const k = x.toLowerCase(); if(!seen[k]){ seen[k] = 1; uniq++; } });
-  document.getElementById('deStats').textContent = v.length + ' / ' + uniq;
+  raw.forEach(function(x){ const k = x.toLowerCase(); if(!seen[k]){ seen[k] = 1; uniq++; } });
+  const processed = applyRules(raw, collectRules());
+  document.getElementById('deStats').textContent =
+    raw.length + ' / ' + uniq + ' / 规则后 ' + processed.length;
 }
 document.addEventListener('input', function(e){
-  if(e.target && e.target.id === 'deContent') updateDeStats();
+  if(e.target && (e.target.id === 'deContent' || e.target.id === 'rBlackText' || e.target.id === 'rRegexText')) updateDeStats();
 });
 function showSheet(id){
   document.getElementById('overlay').classList.add('show');
