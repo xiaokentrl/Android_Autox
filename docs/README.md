@@ -110,9 +110,9 @@ lib/engine.js   任务循环（间隔节流/上限/审计），attemptConnect �
       connected/wrong_password/timeout/not_found/saved），TASK_START→尝试→TASK_END 全链路实机验证
 - [x] 运行期控制：data/selftest.flag 触发测试任务、data/stop.flag 停止任务（main.js 轮询）
 - [x] 单实例保护：启动时检测已有 main.js 执行则退出（engines.all/getSource）
-- [x] 真机端到端自测（2026-11-20）：真实任务 20 条完整跑通——main.js 启动→合规→
-      引擎驱动 WLAN 页逐条尝试→not_found 分支判定→TASK_END→runtime.log 全落盘→悬浮窗实时显示；
-      not_found/saved 分支已定标；wrong_password/connected 分支待目标 AP 真实在线时定标（物理条件依赖）
+- [x] 真机端到端自测（2026-11-20，两轮）：真实任务完整跑通（悬浮窗实时进度/引擎驱动 WLAN 页/
+      日志审计全落盘）；分支定标进度：not_found ✓ saved(代码路径) ✓ timeout ✓ 暂停/停止 ✓——
+      wrong_password/connected 分支待目标 AP 在线且未保存时定标（美宜佳为已保存网络点击直接连接）
 - [ ] wrong_password/connected 分支定标：需一个自有且在线的未保存 AP（列表中可见且带密码框）
 - [x] 日志页接真实数据：runtime.log + audit.log 双区块（最新在前）、进入自动刷新、
       🔄刷新 / 📤导出到 /sdcard/Download / 🧹清空运行日志（审计日志不可清空）；引擎尝试实时落盘 runtime.log

@@ -112,17 +112,21 @@ function attemptConnect(ssid, pwd, cfg) {
             return 'not_found';
         }
         entry.click();
-        sleepMs(1500);
-
-        // 弹层分三种：密码输入框（未保存网络）/ 连接按钮弹层（已保存网络）/ 无弹层（直接连）
-        let box = className('android.widget.EditText').findOnce();
+        // 轮询等待弹层出现（MIUI 弹窗渲染需要 2-3 秒）
+        let box = null, connBtn = null;
+        for (let d = 0; d < 6; d++) {
+            sleepMs(800);
+            box = className('android.widget.EditText').findOnce();
+            connBtn = textMatches(/^(连接|确定)$/).clickable().findOnce();
+            if (box || connBtn) break;
+        }
         if (box) {
             box.setText(pwd);
             sleepMs(600);
             let ok = textMatches(/(^(连接|确定|好)$)/).clickable().findOnce();
             if (!ok) ok = descMatches(/(连接|确定)/).clickable().findOnce();
             if (ok) { ok.click(); }
-        } else if (textMatches(/^(连接|确定)$/).clickable().findOnce()) {
+        } else if (connBtn) {
             // 已保存网络：密码系统已知，跳过尝试
             clog('已保存网络（无密码框，弹连接确认），跳过: ' + ssid);
             let cancel = textMatches(/^(取消)$/).clickable().findOnce();

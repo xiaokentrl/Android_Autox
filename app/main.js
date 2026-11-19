@@ -266,6 +266,21 @@ function handleCommand(cmd, payload) {
         });
     } else if (cmd === 'get_history') {
         pushHistory();
+    } else if (cmd === 'get_wifi_status') {
+        threads.start(function () {
+            let ssid = '', rssi = null, connected = false;
+            try {
+                importClass(android.net.wifi.WifiManager);
+                const wm = context.getSystemService(context.WIFI_SERVICE);
+                const info = wm.getConnectionInfo();
+                const raw = String(info.getSSID() || '');
+                connected = info.getNetworkId() !== -1;
+                ssid = raw.replace(/^"|"$/g, '');
+                if (ssid === '<unknown ssid>') ssid = '';
+                rssi = info.getRssi();
+            } catch (e) {}
+            pushEvent('wifi_status', { ssid: connected ? ssid : '', connected: connected, rssi: rssi });
+        });
     } else if (cmd === 'skip_task') {
         engine.skip();
     } else if (cmd === 'get_perms') {
