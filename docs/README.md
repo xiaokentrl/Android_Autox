@@ -132,6 +132,13 @@ lib/engine.js   任务循环（间隔节流/上限/审计），attemptConnect �
 - [x] 保存规则链：dictEdit 全小写/长度过滤/正则保留/黑名单/长度升序，实时预览
       「原始/去重/规则后」三计数，规则随 dictmeta.json 持久化（重开自动回填）
 
+## 自测
+
+- `node deploy/test-rules.js`：规则链 applyRules 8 用例（vm 沙箱，桩掉 DOM）
+- `node deploy/test-engine.js`：多目标引擎状态机 8 用例（合规拒绝/命中/双目标/continue/停止/暂停/空字典/进度归零）
+- `node deploy/check-exports.js`：模块导出完整性检查
+- 历史教训：engine.js 曾导出未定义的 isRunning（引用即崩），自测抓出
+
 ## 运维备忘（MIUI marble 实测）
 
 - 无障碍服务：MIUI 会重置 adb 方式启用和被 force-stop 的服务，必须在设置界面手动开；
