@@ -208,8 +208,7 @@ function handleCommand(cmd, payload) {
             function tail(name, n) {
                 const p = files.cwd() + '/data/' + name;
                 if (!files.exists(p)) return [];
-                const lines = files.read(p).split(/?
-/)
+                const lines = files.read(p).split(/\r?\n/)
                     .map(function (s) { return s.trim(); })
                     .filter(function (s) { return s.length > 0; });
                 return lines.slice(-n).reverse(); // 最新在前
@@ -228,113 +227,12 @@ function handleCommand(cmd, payload) {
             let out = '';
             ['runtime.log', 'audit.log'].forEach(function (name) {
                 if (files.exists(dir + name)) {
-                    out += '===== ' + name + ' =====
-' + files.read(dir + name) + '
-
-';
+                    out += '===== ' + name + ' =====\n' + files.read(dir + name) + '\n\n';
                 }
             });
             const dest = '/sdcard/Download/wifipoller-logs-' + Date.now() + '.txt';
             files.write(dest, out);
             toast('已导出到：' + dest);
-        });
-    } else if (cmd === 'get_dicts') {
-        threads.start(function () { pushEvent('dicts_data', { list: dictsList() }); });
-    } else if (cmd === 'get_dict_entries') {
-        threads.start(function () {
-            const name = sanitizeDictName(payload && payload.name);
-            const p = files.cwd() + '/dicts/' + name + '.txt';
-            const meta = store.load('dictmeta.json', {});
-            const m = meta[name] || {};
-            let entries = [];
-            if (files.exists(p)) {
-                entries = files.read(p).split(/\r?\n/)
-                    .map(function (s) { return s.trim(); })
-                    .filter(function (s) { return s.length > 0; });
-            }
-            pushEvent('dict_entries', { name: name, entries: entries, desc: m.desc || '', enabled: m.enabled !== false, rules: m.rules || {} });
-        });
-    } else if (cmd === 'save_dict') {
-        threads.start(function () {
-            const name = sanitizeDictName(payload && payload.name);
-            const lines = String(payload && payload.content || '').split(/\r?\n/)
-                .map(function (s) { return s.trim(); })
-                .filter(function (s) { return s.length > 0; });
-            const seen = Object.create(null);
-            const uniq = lines.filter(function (s) {
-                const k = s.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true;
-            });
-            files.createWithDirs(files.cwd() + '/dicts/' + name + '.txt');
-            files.write(files.cwd() + '/dicts/' + name + '.txt', uniq.join('\n'));
-            const meta = store.load('dictmeta.json', {});
-            meta[name] = {
-                enabled: payload && payload.enabled !== false,
-                desc: String(payload && payload.desc || ''),
-                rules: payload && payload.rules || {},
-            };
-            store.save('dictmeta.json', meta);
-            compliance.audit('DICT_SAVE', name + ' 条数=' + uniq.length);
-            pushEvent('dicts_data', { list: dictsList() });
-        });
-    } else if (cmd === 'create_dict') {
-        threads.start(function () {
-            const name = sanitizeDictName(payload && payload.name);
-            const p = files.cwd() + '/dicts/' + name + '.txt';
-            if (files.exists(p)) { toast('字典已存在：' + name); return; }
-            files.createWithDirs(p);
-            files.write(p, '');
-            const meta = store.load('dictmeta.json', {});
-            meta[name] = { enabled: true, desc: '' };
-            store.save('dictmeta.json', meta);
-            compliance.audit('DICT_CREATE', name);
-            pushEvent('dicts_data', { list: dictsList() });
-        });
-    } else if (cmd === 'delete_dict') {
-        threads.start(function () {
-            const name = sanitizeDictName(payload && payload.name);
-            const p = files.cwd() + '/dicts/' + name + '.txt';
-            if (files.exists(p)) files.remove(p);
-            const meta = store.load('dictmeta.json', {});
-            delete meta[name];
-            store.save('dictmeta.json', meta);
-            compliance.audit('DICT_DELETE', name);
-            pushEvent('dicts_data', { list: dictsList() });
-        });
-    } else if (cmd === 'set_dict_enabled') {
-        threads.start(function () {
-            const name = sanitizeDictName(payload && payload.name);
-            const meta = store.load('dictmeta.json', {});
-            const m = meta[name] || {};
-            m.enabled = !!(payload && payload.enabled);
-            meta[name] = m;
-            store.save('dictmeta.json', meta);
-            compliance.audit('DICT_ENABLED', name + '=' + m.enabled);
-            pushEvent('dicts_data', { list: dictsList() });
-        });
-    } else if (cmd === 'list_download_txt') {
-        threads.start(function () {
-            const dl = '/sdcard/Download/';
-            const files_ = files.exists(dl)
-                ? files.listDir(dl, function (n) { return n.endsWith('.txt'); }) : [];
-            pushEvent('download_txt_list', { files: files_ });
-        });
-    } else if (cmd === 'import_from_download') {
-        threads.start(function () {
-            const f = String(payload && payload.file || '').replace(/[\/\\]/g, '');
-            const src = '/sdcard/Download/' + f;
-            if (!files.exists(src)) { toast('文件不存在：' + f); return; }
-            const name = f.replace(/\.txt$/, '');
-            const content = files.read(src).split(/\r?\n/)
-                .map(function (s) { return s.trim(); })
-                .filter(function (s) { return s.length > 0; });
-            files.createWithDirs(files.cwd() + '/dicts/' + name + '.txt');
-            files.write(files.cwd() + '/dicts/' + name + '.txt', content.join('\n'));
-            const meta = store.load('dictmeta.json', {});
-            if (!meta[name]) meta[name] = { enabled: true, desc: '从 Download 导入' };
-            store.save('dictmeta.json', meta);
-            compliance.audit('DICT_IMPORT', name + ' 条数=' + content.length);
-            toast('已导入：' + name);
-            pushEvent('dicts_data', { list: dictsList() });
         });
     } else if (cmd === 'pause_task') {
         engine.pause();

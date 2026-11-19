@@ -8,18 +8,18 @@
 let win = null;
 
 function ensureWin(callbacks) {
-    win = floaty.window(
-        <frame gravity="left|top">
-            <vertical padding="8" bg="#CC14161B">
-                <text id="title" textSize="10" textColor="#8AE8EAED" text="轮询任务（可拖动）"/>
-                <text id="status" textSize="12" textColor="#FFFFFF" text="准备中"/>
-                <horizontal marginTop="4">
-                    <button id="pauseBtn" text="⏸ 暂停" textSize="11" style="Widget.AppCompat.Button.Borderless" textColor="#5B8CFF"/>
-                    <button id="stopBtn" text="⏹ 停止" textSize="11" style="Widget.AppCompat.Button.Borderless" textColor="#E5484D"/>
-                </horizontal>
-            </vertical>
-        </frame>
-    );
+    // 用字符串 XML 而非 E4X：部分 AutoX 模块上下文不支持 E4X，require 时会语法报错
+    const xml = '<frame gravity="left|top">'
+        + '<vertical padding="8" bg="#CC14161B">'
+        + '<text id="title" textSize="10" textColor="#8AE8EAED" text="轮询任务（可拖动）"/>'
+        + '<text id="status" textSize="12" textColor="#FFFFFF" text="准备中"/>'
+        + '<horizontal marginTop="4">'
+        + '<button id="pauseBtn" text="⏸ 暂停" textSize="11" style="Widget.AppCompat.Button.Borderless" textColor="#5B8CFF"/>'
+        + '<button id="stopBtn" text="⏹ 停止" textSize="11" style="Widget.AppCompat.Button.Borderless" textColor="#E5484D"/>'
+        + '</horizontal>'
+        + '</vertical>'
+        + '</frame>';
+    win = floaty.window(xml);
     // 按住标题栏拖动面板
     let lx = 0, ly = 0, wx = 0, wy = 0;
     win.title.setOnTouchListener(function (v, ev) {
