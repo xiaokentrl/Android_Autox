@@ -346,6 +346,14 @@ details.card>summary+*{margin-top:10px}
         <div class="field"><input type="text" id="rRegexText" placeholder="^[a-zA-Z0-9]{8,16}$"></div>
         <div class="rule"><input type="checkbox" id="rBlack"><span class="name">黑名单词条（逗号分隔）</span></div>
         <div class="field"><input type="text" id="rBlackText" placeholder="admin, 123456"></div>
+        <div class="field"><label>扩展规则（会改变条目内容与数量，先于下方过滤执行）</label></div>
+        <div class="rule"><input type="checkbox" id="rVarCase"><span class="name">大小写变体（原样 / 首字母大写 / 全大写）</span></div>
+        <div class="rule"><input type="checkbox" id="rPrefix"><span class="name">加前缀</span></div>
+        <div class="field"><input type="text" id="rPrefixText" placeholder="如：景区-"></div>
+        <div class="rule"><input type="checkbox" id="rSuffix"><span class="name">加后缀</span></div>
+        <div class="field"><input type="text" id="rSuffixText" placeholder="如：-5G"></div>
+        <div class="rule"><input type="checkbox" id="rNums"><span class="name">追加数字序列</span></div>
+        <div class="field"><input type="text" id="rNumsText" placeholder="1990-2025 或 01,02,03"></div>
         <div class="rule"><input type="checkbox" id="rSortLen"><span class="name">排序：长度升序</span></div>
       </div>
       <div class="card">
@@ -1001,6 +1009,13 @@ window.__onNativeEvent = function(name, data){
       document.getElementById('rBlack').checked = !!(r.blacklist && r.blacklist.length);
       document.getElementById('rBlackText').value = (r.blacklist || []).join(', ');
       document.getElementById('rSortLen').checked = !!r.sortLen;
+      document.getElementById('rVarCase').checked = !!r.varCase;
+      document.getElementById('rPrefix').checked = !!r.prefix;
+      document.getElementById('rPrefixText').value = r.prefix || '';
+      document.getElementById('rSuffix').checked = !!r.suffix;
+      document.getElementById('rSuffixText').value = r.suffix || '';
+      document.getElementById('rNums').checked = !!r.nums;
+      document.getElementById('rNumsText').value = r.nums || '';
       document.getElementById('deContent').value = curEntries.join('\n');
       updateDeStats();
     }
@@ -1173,7 +1188,7 @@ function restoreCfg(){
 }
 document.addEventListener('change', function(e){
   persistCfg();
-  if(e.target && (e.target.id === 'rLower' || e.target.id === 'rLen' || e.target.id === 'rRegex' || e.target.id === 'rBlack' || e.target.id === 'rSortLen')) updateDeStats();
+  if(e.target && (e.target.id === 'rLower' || e.target.id === 'rLen' || e.target.id === 'rRegex' || e.target.id === 'rBlack' || e.target.id === 'rSortLen' || e.target.id === 'rVarCase' || e.target.id === 'rPrefix' || e.target.id === 'rSuffix' || e.target.id === 'rNums')) updateDeStats();
 });
 document.addEventListener('input', persistCfg);
 
@@ -1181,6 +1196,7 @@ document.addEventListener('input', persistCfg);
 let DICTS = [];
 let curDict = null;
 let curEntries = [];
+let entryChecked = Object.create(null);
 
 function refreshDicts(){
   if(window.__AUTOX){ nativeSend('get_dicts'); }
@@ -1229,7 +1245,7 @@ function openDictEdit(name){
     document.getElementById('deName').value = name;
     document.getElementById('deDesc').value = '演示字典（浏览器预览）';
     document.getElementById('deEnabled').checked = true;
-    document.getElementById('deContent').value = 'demo0001\n' + 'demo0002';
+    document.getElementById('deContent').value = 'demo0001' + String.fromCharCode(92) + 'n' + 'demo0002';
     updateDeStats();
   }
 }
@@ -1237,7 +1253,7 @@ function openEntries(name){
   curDict = name;
   go('entries', '条目编辑');
   if(window.__AUTOX){ nativeSend('get_dict_entries', {name: name}); }
-  else { renderEntries(name, ['demo0001','demo0002','demo0003']); }
+  else { renderEntries(name, ['demo0001', 'demo0002', 'demo0003']); }
 }
 function saveDictEdit(){
   const raw = document.getElementById('deContent').value.split(/\r?\n/)
@@ -1264,10 +1280,6 @@ function setDictEnabled(name, enabled){
   nativeSend('set_dict_enabled', {name: name, enabled: enabled});
   toast(enabled ? '已启用' : '已停用');
 }
-function openDlImport(){ showSheet('dlSheet'); if(window.__AUTOX){ nativeSend('list_download_txt'); } }
-function importFromDownload(file){
-  if(window.__AUTOX){ nativeSend('import_from_download', {file: file}); closeSheet('dlSheet'); setTimeout(refreshDicts, 600); }
-}
 function deleteSelectedEntries(){
   const keep = curEntries.filter(function(e, i){ return !entryChecked[i]; });
   if(keep.length === curEntries.length){ toast('未勾选任何条目'); return; }
@@ -1277,27 +1289,6 @@ function deleteSelectedEntries(){
     renderEntries(curDict, keep);
   });
 }
-
-/* ---------- 任务历史渲染 ---------- */
-function renderHistory(list){
-  const box = document.getElementById('historyList');
-  if(!box) return;
-  if(!list || !list.length){ box.innerHTML = '<div class="wl-empty">暂无任务记录</div>'; return; }
-  box.innerHTML = list.map(function(h){
-    const multi = h.targets && h.targets.length > 1;
-    const t = multi ? h.targets[0] + ' 等 ' + h.targets.length + ' 个' : (h.targets[0] || '');
-    const cls = h.status === '命中' ? 'ok' : (h.status === '运行中' ? 'warn' : '');
-    const hits = (h.hits && h.hits.length) ? ' · 命中: ' + escHtml(h.hits.join(', ')) : '';
-    return '<div class="row"><div style="min-width:0">'
-      + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(t) + '</div>'
-      + '<div class="sub">' + escHtml(h.time) + ' · ' + escHtml(h.status) + hits + '</div></div>'
-      + '<span class="tag ' + cls + '">' + escHtml(h.status) + '</span></div>';
-  }).join('');
-}
-function refreshHistory(){ if(window.__AUTOX) nativeSend('get_history'); }
-
-/* ---------- 字典事件渲染 ---------- */
-let entryChecked = Object.create(null);
 function renderEntries(name, entries){
   document.getElementById('enName').textContent = name;
   document.getElementById('enCount').textContent = entries.length;
@@ -1308,6 +1299,8 @@ function renderEntries(name, entries){
       + '<span class="pwd">' + escHtml(e) + '</span></div>';
   }).join('') : '<div class="wl-empty">空字典</div>';
 }
+
+/* ---------- 保存规则链 ---------- */
 function collectRules(){
   return {
     lower: document.getElementById('rLower').checked,
@@ -1318,14 +1311,162 @@ function collectRules(){
     blacklist: document.getElementById('rBlack').checked
       ? genList(document.getElementById('rBlackText').value) : [],
     sortLen: document.getElementById('rSortLen').checked,
+    varCase: document.getElementById('rVarCase').checked,
+    prefix: document.getElementById('rPrefix').checked ? document.getElementById('rPrefixText').value : '',
+    suffix: document.getElementById('rSuffix').checked ? document.getElementById('rSuffixText').value : '',
+    nums: document.getElementById('rNums').checked ? document.getElementById('rNumsText').value.trim() : '',
   };
+}
+function expandNums(v){
+  const out = [];
+  const BS = String.fromCharCode(92);
+  const rangeRe = new RegExp('^(' + BS + 'd+)-(' + BS + 'd+)' + BS + 's*');
+  v.split(/[,，]+/).map(function(t){ return t.trim(); }).filter(Boolean).forEach(function(t){
+    const m = t.match(rangeRe);
+    if(m){
+      const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+      if(b - a <= 10000){
+        for(let i = Math.min(a, b); i <= Math.max(a, b); i++) out.push(String(i));
+      }
+    } else out.push(t);
+  });
+  return out;
 }
 function applyRules(lines, r){
   let out = lines.filter(function(s){ return s.length > 0; });
+  // 扩展规则：先变换内容（变体/追加数字/前后缀）
+  if(r.varCase){
+    const exp = [];
+    out.forEach(function(l){
+      exp.push(l, l.charAt(0).toUpperCase() + l.slice(1), l.toUpperCase());
+    });
+    out = exp;
+  }
+  if(r.nums){
+    const nums = expandNums(r.nums);
+    const exp = [];
+    out.forEach(function(l){ nums.forEach(function(x){ exp.push(l + x); }); });
+    out = exp;
+  }
+  if(r.prefix) out = out.map(function(s){ return r.prefix + s; });
+  if(r.suffix) out = out.map(function(s){ return s + r.suffix; });
+  // 全小写在变体之后（两者同时启用时，最终结果为小写）
   if(r.lower) out = out.map(function(s){ return s.toLowerCase(); });
+  // 去重：变体开启时按精确大小写（否则变体无意义），否则忽略大小写
   const seen = Object.create(null);
+  const keyOf = r.varCase ? function(s){ return s; } : function(s){ return s.toLowerCase(); };
   out = out.filter(function(s){
-    const k = s.toLowerCase(); if(seen[k]) return false; seen[k] = 1; return true;
+    const k = keyOf(s); if(seen[k]) return false; seen[k] = 1; return true;
+  });
+  if(r.len) out = out.filter(function(s){ return s.length >= r.min && s.length <= r.max; });
+  if(r.regex){
+    let re = null;
+    try { re = new RegExp(r.regex); } catch (e) { toast('正则无效，已跳过该规则'); }
+    if(re) out = out.filter(function(s){ return re.test(s); });
+  }
+  if(r.blacklist.length){
+    const bl = r.blacklist.map(function(s){ return s.toLowerCase(); });
+    out = out.filter(function(s){ return bl.indexOf(s.toLowerCase()) < 0; });
+  }
+  if(r.sortLen) out = out.slice().sort(function(a, b){ return a.length - b.length; });
+  return out;
+}
+function updateDeStats(){
+  const raw = document.getElementById('deContent').value.split(/\r?\n/)
+    .map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+  const seen = Object.create(null); let uniq = 0;
+  raw.forEach(function(x){ const k = x.toLowerCase(); if(!seen[k]){ seen[k] = 1; uniq++; } });
+  const processed = applyRules(raw, collectRules());
+  document.getElementById('deStats').textContent =
+    raw.length + ' / ' + uniq + ' / 规则后 ' + processed.length;
+}
+function saveDictEditWrap(){}
+
+/* ---------- 日志页（真实数据） ---------- *//* ---------- 日志页（真实数据） ---------- */
+function logCls(line){
+  if(/命中|TASK_SUCCESS|已成功|成功$/.test(line)) return 'ok';
+  if(/密码错误|密码不正确|超时|未找到|失败|REJECT|手动停止|TASK_END|结束/.test(line)) return 'fail';
+  return '';
+}
+function renderLogBox(id, lines){
+  const box = document.getElementById(id);
+  if(!lines || !lines.length){ box.innerHTML = '<div class="wl-empty">暂无</div>'; return; }
+  box.innerHTML = lines.map(function(l){
+    return '<div class="log-line ' + logCls(l) + '"><b>' + escHtml(l) + '</b></div>';
+  }).join('');
+}
+function renderLogs(data){
+  renderLogBox('logAudit', data && data.audit);
+  renderLogBox('logRuntime', data && data.runtime);
+}
+function refreshLogs(){
+  if(window.__AUTOX){ nativeSend('get_logs'); }
+  else {
+    // 浏览器预览：演示数据
+    renderLogs({
+      audit: ['[2026-11-19 05:00:00] APP_LAUNCH | 浏览器预览', '[2026-11-19 05:00:01] TASK_START | ssid=演示网络 maxAttempts=50'],
+      runtime: ['05:00:02 第 1 条 · 密码错误', '05:00:05 第 2 条 · 命中'],
+    });
+  }
+}
+function exportLogs(){
+  if(window.__AUTOX){ nativeSend('export_logs'); }
+  else { toast('浏览器预览无导出'); }
+}
+function clearRuntimeLog(){
+  openModal('清空运行日志', '将清空 runtime.log（不影响审计日志）。审计日志不可清空。', '清空', function(){
+    if(window.__AUTOX) nativeSend('clear_runtime_log');
+    else { renderLogs({ audit: [], runtime: [] }); toast('已清空'); }
+  });
+}
+
+/* ---------- 初始化 ---------- */
+document.querySelector('.tabbar button').classList.add('on');
+restoreCfg();
+renderWhitelist();
+if(window.__AUTOX) nativeSend('get_whitelist'); // 页面就绪后拉取原生权威白名单
+if(window.__AUTOX) nativeSend('get_history'); // 拉取任务历史
+</script>
+</body>
+</html>);
+  v.split(/[,，]+/).map(function(t){ return t.trim(); }).filter(Boolean).forEach(function(t){
+    const m = t.match(rangeRe);
+    if(m){
+      const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+      if(b - a <= 10000){
+        for(let i = Math.min(a, b); i <= Math.max(a, b); i++) out.push(String(i));
+      }
+    } else out.push(t);
+  });
+  return out;
+}
+function applyRules(lines, r){
+  let out = lines.filter(function(s){ return s.length > 0; });
+  // 扩展规则：先变换内容（变体/追加数字/前后缀）
+  if(r.varCase){
+    const exp = [];
+    out.forEach(function(l){
+      exp.push(l, l.charAt(0).toUpperCase() + l.slice(1), l.toUpperCase());
+    });
+    out = exp;
+  }
+  if(r.nums){
+    const nums = expandNums(r.nums);
+    const exp = [];
+    out.forEach(function(l){ nums.forEach(function(x){ exp.push(l + x); }); });
+    out = exp;
+  }
+  if(r.prefix) out = out.map(function(s){ return r.prefix + s; });
+  if(r.suffix) out = out.map(function(s){ return s + r.suffix; });
+  // 全小写在变体之后（两者同时启用时，最终结果为小写）
+  if(r.lower) out = out.map(function(s){ return s.toLowerCase(); });
+  // 去重：变体开启时按精确大小写（否则变体无意义），否则忽略大小写
+  const seen = Object.create(null);
+  const caseKey = r.varCase
+    ? function(s){ return s; }
+    : function(s){ return s.toLowerCase(); };
+  out = out.filter(function(s){
+    const k = caseKey(s); if(seen[k]) return false; seen[k] = 1; return true;
   });
   if(r.len) out = out.filter(function(s){ return s.length >= r.min && s.length <= r.max; });
   if(r.regex){
@@ -1350,7 +1491,7 @@ function updateDeStats(){
     raw.length + ' / ' + uniq + ' / 规则后 ' + processed.length;
 }
 document.addEventListener('input', function(e){
-  if(e.target && (e.target.id === 'deContent' || e.target.id === 'rBlackText' || e.target.id === 'rRegexText')) updateDeStats();
+  if(e.target && (e.target.id === 'deContent' || e.target.id === 'rBlackText' || e.target.id === 'rRegexText' || e.target.id === 'rPrefixText' || e.target.id === 'rSuffixText' || e.target.id === 'rNumsText' || e.target.id === 'rMin' || e.target.id === 'rMax')) updateDeStats();
 });
 function showSheet(id){
   document.getElementById('overlay').classList.add('show');

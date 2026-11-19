@@ -86,5 +86,33 @@ t('规则后为空是合法结果', ['abc'],
   { lower: true, len: true, min: 10, max: 16, regex: '', blacklist: [], sortLen: false },
   []);
 
+t('大小写变体：原样/首字母大写/全大写', ['abc'],
+  { lower: false, len: false, min: 0, max: 99, regex: '', blacklist: [], sortLen: false,
+    varCase: true, prefix: '', suffix: '', nums: '' },
+  ['abc', 'Abc', 'ABC']);
+t('加前缀+后缀', ['abc'],
+  { lower: false, len: false, min: 0, max: 99, regex: '', blacklist: [], sortLen: false,
+    varCase: false, prefix: '景区-', suffix: '-5G', nums: '' },
+  ['景区-abc-5G']);
+t('追加数字序列（范围展开）', ['ab'],
+  { lower: false, len: false, min: 0, max: 99, regex: '', blacklist: [], sortLen: false,
+    varCase: false, prefix: '', suffix: '', nums: '0-2' },
+  ['ab0', 'ab1', 'ab2']);
+t('追加数字序列（逗号列表）', ['wifi'],
+  { lower: false, len: false, min: 0, max: 99, regex: '', blacklist: [], sortLen: false,
+    varCase: false, prefix: '', suffix: '', nums: '2024, 2025' },
+  ['wifi2024', 'wifi2025']);
+t('组合链：变体+前缀+追加数字+长度过滤', ['home'],
+  { lower: false, len: true, min: 6, max: 12, regex: '', blacklist: [], sortLen: false,
+    varCase: true, prefix: '景区-', suffix: '', nums: '2024' },
+  ['景区-home2024', '景区-Home2024', '景区-HOME2024']);
+t('长度不足被过滤', ['ab'],
+  { lower: false, len: true, min: 6, max: 99, regex: '', blacklist: [], sortLen: false,
+    varCase: false, prefix: '景区-', suffix: '', nums: '' },
+  []);
+t('大小写变体（小写输入）', ['abc'],
+  { lower: false, len: false, min: 0, max: 99, regex: '', blacklist: [], sortLen: false,
+    varCase: true, prefix: '', suffix: '', nums: '' },
+  ['abc', 'Abc', 'ABC']);
 console.log('\n结果: ' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
