@@ -266,6 +266,32 @@ function handleCommand(cmd, payload) {
         });
     } else if (cmd === 'get_history') {
         pushHistory();
+    } else if (cmd === 'skip_task') {
+        engine.skip();
+    } else if (cmd === 'get_perms') {
+        threads.start(function () {
+            let acc = false, overlay = false, batt = false;
+            try { acc = !!(auto && auto.service); } catch (e) {}
+            try {
+                importClass(android.provider.Settings);
+                overlay = Settings.canDrawOverlays(context);
+            } catch (e) {}
+            try {
+                importClass(android.os.PowerManager);
+                const pm = context.getSystemService(context.POWER_SERVICE);
+                batt = pm.isIgnoringBatteryOptimizations(context.getPackageName());
+            } catch (e) {}
+            pushEvent('perms_data', { acc: acc, overlay: overlay, batt: batt });
+        });
+    } else if (cmd === 'open_acc_settings') {
+        app.startActivity({ action: 'android.settings.ACCESSIBILITY_SETTINGS' });
+    } else if (cmd === 'open_overlay_settings') {
+        app.startActivity({
+            action: 'android.settings.ACTION_MANAGE_OVERLAY_PERMISSION',
+            data: 'package:org.autojs.autoxjs.v7'
+        });
+    } else if (cmd === 'open_batt_opt') {
+        app.startActivity({ action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS' });
     } else if (cmd === 'pause_task') {
         engine.pause();
         panel.setPaused(true);

@@ -196,7 +196,7 @@ details.card>summary+*{margin-top:10px}
       <div class="card">
         <div class="row"><span>合规模式</span><span class="tag ok">已开启 🔒</span></div>
         <div class="row"><span>授权状态</span><span id="homeAuth" class="tag warn">未确认</span></div>
-        <div class="row"><span>当前网络</span><b>MyHome_5G</b></div>
+        <div class="row"><span>当前网络</span><b id="homeCurNet">MyHome_5G</b></div>
         <div class="row"><span>运行状态</span><span id="homeRun" class="tag">未运行</span></div>
       </div>
       <div class="btns">
@@ -290,7 +290,7 @@ details.card>summary+*{margin-top:10px}
         <div class="row"><span>当前密码</span><span class="mask-pwd" id="curPwd" onclick="togglePwd()">••••••</span></div>
         <div class="btns">
           <button class="btn btn-ghost btn-sm" style="flex:1" id="pauseRunBtn" onclick="togglePauseRun()">⏸ 暂停</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('已跳过当前')">⏭ 跳过</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="skipTask()">⏭ 跳过</button>
           <button class="btn btn-danger btn-sm" style="flex:1" onclick="stopRun()">⏹ 停止</button>
         </div>
       </div>
@@ -467,11 +467,10 @@ details.card>summary+*{margin-top:10px}
 
       <details class="card">
         <summary>4 · 权限向导</summary>
-        <div class="perm"><span>无障碍服务</span><button onclick="toast('跳转系统设置')">去开启</button></div>
-        <div class="perm"><span>悬浮窗权限</span><button onclick="toast('跳转系统设置')">去开启</button></div>
-        <div class="perm"><span>通知权限</span><button onclick="toast('已授权')">已开启</button></div>
-        <div class="perm"><span>存储 / 文件访问</span><button onclick="toast('已授权')">已开启</button></div>
-        <div class="perm"><span>电池优化白名单</span><button onclick="toast('跳转系统设置')">去开启</button></div>
+        <div class="perm"><span>无障碍服务</span><span class="tag" id="permAcc">检测中</span><button class="btn btn-ghost btn-sm" onclick="openAccSettings()">去设置</button></div>
+        <div class="perm"><span>悬浮窗权限</span><span class="tag" id="permOverlay">检测中</span><button class="btn btn-ghost btn-sm" onclick="openOverlaySettings()">去设置</button></div>
+        <div class="perm"><span>电池优化白名单</span><span class="tag" id="permBatt">检测中</span><button class="btn btn-ghost btn-sm" onclick="openBattOpt()">去设置</button></div>
+        <div class="perm"><span>通知 / 存储权限</span><span class="tag ok">已授权</span></div>
       </details>
 
       <details class="card">
@@ -566,9 +565,7 @@ details.card>summary+*{margin-top:10px}
   </div>
   <div class="sheet" id="sheet">
     <h4>选择目标网络 <span onclick="closeAll()" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
-    <div class="item" onclick="pickNet('MyHome_5G')">MyHome_5G <span class="tag ok">白名单</span></div>
-    <div class="item" onclick="pickNet('Office_Test')">Office_Test <span class="tag ok">白名单</span></div>
-    <div class="item" onclick="pickNet('Lab_Guest')">Lab_Guest <span class="tag">未授权</span></div>
+    <div id="sheetList"><div class="wl-empty">白名单为空</div></div>
   </div>
   <div class="sheet" id="wifiSheet">
     <h4>选择白名单网络 · 附近扫描
@@ -619,6 +616,8 @@ function go(id, title, fromBack){
   // 进入日志页自动拉取最新日志
   if(id==='log' && window.__AUTOX) nativeSend('get_logs');
   if(id==='dict') refreshDicts();
+  if(id==='set' && window.__AUTOX) nativeSend('get_perms');
+  if(id==='set' && window.__AUTOX) nativeSend('get_perms');
   if(id==='home') refreshHistory();
 }
 function goBack(){
@@ -680,7 +679,28 @@ function openSheet(){
   document.getElementById('overlay').classList.add('show');
   document.getElementById('sheet').classList.add('show');
 }
-function pickNet(name){ closeAll(); toast('已选择：'+name); }
+let currentTarget = '';
+function pickNet(name){
+  currentTarget = name;
+  const el = document.getElementById('homeCurNet');
+  if(el) el.textContent = name;
+  persistCfg();
+  closeAll();
+  toast('目标已设为：' + name);
+}
+function openSheet(){
+  renderSheetList();
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+}
+function renderSheetList(){
+  const wl = getWL();
+  const box = document.getElementById('sheetList');
+  box.innerHTML = wl.length ? wl.map(function(name){
+    return '<div class="item" onclick="pickNet(\'' + escHtml(name) + '\')">' + escHtml(name)
+      + ' <span class="tag ok">白名单</span></div>';
+  }).join('') : '<div class="wl-empty">白名单为空：请先在下方添加或扫描选择。</div>';
+}
 
 /* ---------- 规则上下移动 ---------- */
 function moveRule(btn, dir){
@@ -716,7 +736,7 @@ window.__cmdQueue = [];           // UI → 原生命令队列，由 main.js 轮
 function nativeSend(cmd, payload){
   window.__cmdQueue.push({cmd: cmd, payload: payload || null});
 }
-function currentSsid(){
+function currentSsid(){ if(currentTarget) return currentTarget;
   const rows = document.querySelectorAll('#page-home .card b');
   return (rows[0] && rows[0].textContent) || 'MyHome_5G';
 }
@@ -774,6 +794,10 @@ function renderWhitelist(){
   document.querySelectorAll('.wl-count').forEach(function(el){ el.textContent = list.length; });
   const tAll = document.getElementById('tAllCount');
   if(tAll) tAll.textContent = list.length;
+  const wlSel = document.getElementById('wlSelect');
+  if(wlSel) wlSel.innerHTML = list.length
+    ? list.map(function(name){ return '<option>' + escHtml(name) + '</option>'; }).join('')
+    : '<option>（白名单为空）</option>';
   [['wlScrollAuth','wlMoreAuth'],['wlScrollSet','wlMoreSet']].forEach(function(ids){
     const tb = document.getElementById(ids[0]);
     if(!tb) return;
@@ -980,8 +1004,16 @@ function wlImportFile(){
 /* 原生引擎 → UI 事件入口（main.js 通过 evaluateJavascript 调用） */
 window.__onNativeEvent = function(name, data){
   if(name === 'init_whitelist'){
+    if(!currentTarget && data && data.list && data.list.length) currentTarget = data.list[0];
+    if(!currentTarget && data && data.list && data.list.length) currentTarget = data.list[0];
     // 原生 config.json 为白名单权威来源，启动时下发（跳过回传避免环路）
     setWL((data && data.list) || [], true);
+    return;
+  }
+  if(name === 'perms_data'){
+    setPermTag('permAcc', data && data.acc, '已开启', '未开启');
+    setPermTag('permOverlay', data && data.overlay, '已开启', '未开启');
+    setPermTag('permBatt', data && data.batt, '已忽略', '未设置');
     return;
   }
   if(name === 'history_data'){
@@ -1146,6 +1178,11 @@ function stopRun(success){
   addRunLog(success?'任务成功结束':'任务已手动停止', success?'ok':'');
   if(success) toast('已成功连接');
 }
+function skipTask(){
+  if(!window.__AUTOX){ toast('浏览器预览'); return; }
+  nativeSend('skip_task');
+  toast('已请求跳过当前尝试');
+}
 let runPaused = false;
 function togglePauseRun(){
   if(!window.__AUTOX){ toast('浏览器预览'); return; }
@@ -1160,32 +1197,61 @@ function togglePwd(){
 }
 
 /* ---------- 配置持久化（localStorage） ---------- */
-const CFG_KEY = 'wfp_cfg_v3'; // v3：字典三页重构，元素索引变化
-const NO_PERSIST_IDS = ['wlAddInput', 'wlAddInputSet', 'wlImportText']; // 临时输入框不持久化
+const CFG_KEY = 'wfp_cfg_v4'; // v4：仅显式持久化（授权/白名单/目标）
 function persistCfg(){
-  const data = {auth: document.getElementById('authCheck').checked, fields: {}};
-  document.querySelectorAll('.page input, .page select, .page textarea').forEach((el, i)=>{
-    if(NO_PERSIST_IDS.indexOf(el.id) >= 0) return;
-    data.fields[i] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
-  });
-  try{ localStorage.setItem(CFG_KEY, JSON.stringify(data)); }catch(e){}
+  try {
+    localStorage.setItem(CFG_KEY, JSON.stringify({
+      auth: document.getElementById('authCheck').checked,
+      whitelist: getWL(),
+      target: currentTarget,
+    }));
+  } catch (e) {}
 }
 function restoreCfg(){
-  let data = null;
-  try{ data = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); }catch(e){}
-  if(!data) return;
-  const els = document.querySelectorAll('.page input, .page select, .page textarea');
-  Object.keys(data.fields).forEach(i=>{
-    const el = els[i];
-    if(!el || NO_PERSIST_IDS.indexOf(el.id) >= 0) return;
-    if(el.type === 'checkbox' || el.type === 'radio') el.checked = data.fields[i];
-    else el.value = data.fields[i];
-  });
-  if(data.auth){
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); } catch (e) {}
+  if(!d) return;
+  if(d.auth){
+    document.getElementById('authCheck').checked = true;
     document.getElementById('homeAuth').textContent = '已确认';
     document.getElementById('homeAuth').className = 'tag ok';
   }
+  if(Array.isArray(d.whitelist) && d.whitelist.length){
+    document.getElementById('authWhitelist').value = d.whitelist.join(', ');
+  }
+  if(d.target){
+    currentTarget = d.target;
+    const hn = document.getElementById('homeCurNet');
+    if(hn) hn.textContent = d.target;
+  }
 }
+/* ---------- 任务历史（渲染/拉取） ---------- */
+function renderHistory(list){
+  const box = document.getElementById('historyList');
+  if(!box) return;
+  if(!list || !list.length){ box.innerHTML = '<div class="wl-empty">暂无任务记录</div>'; return; }
+  box.innerHTML = list.map(function(h){
+    const multi = h.targets && h.targets.length > 1;
+    const t = multi ? h.targets[0] + ' 等 ' + h.targets.length + ' 个' : (h.targets[0] || '');
+    const cls = h.status === '命中' ? 'ok' : (h.status === '运行中' ? 'warn' : '');
+    const hits = (h.hits && h.hits.length) ? ' · 命中: ' + escHtml(h.hits.join(', ')) : '';
+    return '<div class="row"><div style="min-width:0">'
+      + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(t) + '</div>'
+      + '<div class="sub">' + escHtml(h.time) + ' · ' + escHtml(h.status) + hits + '</div></div>'
+      + '<span class="tag ' + cls + '">' + escHtml(h.status) + '</span></div>';
+  }).join('');
+}
+function refreshHistory(){ if(window.__AUTOX) nativeSend('get_history'); }
+/* ---------- 权限检测/跳转 ---------- */
+function setPermTag(id, ok, on, off){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = ok ? on : off;
+  el.className = 'tag ' + (ok ? 'ok' : 'danger');
+}
+function openAccSettings(){ if(window.__AUTOX) nativeSend('open_acc_settings'); }
+function openOverlaySettings(){ if(window.__AUTOX) nativeSend('open_overlay_settings'); }
+function openBattOpt(){ if(window.__AUTOX) nativeSend('open_batt_opt'); }
 document.addEventListener('change', function(e){
   persistCfg();
   if(e.target && (e.target.id === 'rLower' || e.target.id === 'rLen' || e.target.id === 'rRegex' || e.target.id === 'rBlack' || e.target.id === 'rSortLen' || e.target.id === 'rVarCase' || e.target.id === 'rPrefix' || e.target.id === 'rSuffix' || e.target.id === 'rNums')) updateDeStats();

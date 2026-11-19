@@ -58,6 +58,8 @@ function start(cfg, hooks) {
     state.running = true;
     state.stopFlag = false;
     state.pausedFlag = false;
+    state.skipFlag = false;
+    cfg.skipCheck = function () { return state.skipFlag; };
     compliance.audit('TASK_START',
         'targets=[' + targets.join(', ') + '] maxAttempts=' + candidates.length
         + ' interval=' + intervalMs + 'ms onHit=' + (onHitContinue ? 'continue' : 'stop'));
@@ -107,6 +109,7 @@ function start(cfg, hooks) {
         tried++;
         const pwd = candidates[tried - 1];
         const result = attemptConnect(ssid, pwd, cfg);
+        if (state.skipFlag) state.skipFlag = false;
 
         hooks.onProgress({ tried: tried, total: candidates.length, target: ssid });
         if (result === 'connected') {
@@ -126,6 +129,8 @@ function start(cfg, hooks) {
             hooks.onLog('第 ' + tried + ' 条 · 列表中未找到该网络', 'fail');
         } else if (result === 'saved') {
             hooks.onLog('第 ' + tried + ' 条 · 已在系统保存列表（密码已知），跳过');
+        } else if (result === 'skipped') {
+            hooks.onLog('第 ' + tried + ' 条 · 用户跳过', 'fail');
         } else {
             hooks.onLog('第 ' + tried + ' 条 · 密码错误', 'fail');
         }
@@ -137,6 +142,11 @@ function start(cfg, hooks) {
     }
 
     setTimeout(nextTarget, 300);
+}
+
+/** 跳过当前尝试的等待（结果作废，立即进入下一条） */
+function skip() {
+    if (state.running) state.skipFlag = true;
 }
 
 /** 手动停止（下个间隔生效） */
@@ -160,4 +170,4 @@ function resume() { state.pausedFlag = false; compliance.audit('TASK_RESUME', ''
 function isPaused() { return !!state.pausedFlag; }
 function isRunning() { return state.running; }
 
-module.exports = { start, stop, pause, resume, isPaused, isRunning };
+module.exports = { start, stop, skip, pause, resume, isPaused, isRunning };

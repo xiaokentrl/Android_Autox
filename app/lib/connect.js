@@ -60,7 +60,7 @@ function findSsidEntry(ssid) {
 }
 
 /** 等待连接结果，返回 'connected' | 'wrong_password' | 'timeout' */
-function waitResult(ssid) {
+function waitResult(ssid, cfg) {
     const deadline = Date.now() + RESULT_TIMEOUT_MS;
     while (Date.now() < deadline) {
         sleepMs(800);
@@ -133,7 +133,7 @@ function attemptConnect(ssid, pwd, cfg) {
             clog('无弹层（可能直接开始连接）');
         }
 
-        const result = waitResult(ssid);
+        const result = waitResult(ssid, cfg);
         clog('attempt ' + ssid + ' → ' + result);
         // 失败后是否忘记网络（可选配置）
         if (result === 'wrong_password' && cfg && cfg.forgetAfterFail) {
