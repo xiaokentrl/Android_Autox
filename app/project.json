@@ -1,0 +1,11 @@
+{
+  "name": "WiFi字典轮询器",
+  "packageName": "com.wifipoller.app",
+  "versionCode": 1,
+  "versionName": "0.1.0",
+  "main": "main.js",
+  "useFeatures": [],
+  "launchConfig": {
+    "hideLogs": false
+  }
+}

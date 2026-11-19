@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wi-Fi 字典轮询器 · UI 原型</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--bg:#f2f3f5;--card:#fff;--text:#1a1a1a;--muted:#8a8f99;--primary:#2f6bff;--border:#e6e8eb;--danger:#e5484d;--ok:#18a058;--warn:#f5a623;--chip:#eef2ff}
+body.dark{--bg:#0f1115;--card:#1a1d23;--text:#e8eaed;--muted:#8a8f99;--border:#2a2f37;--primary:#5b8cff;--chip:#1e2637;--bg2:#14171c}
+/* 全屏化改造：去掉桌面预览用的手机壳外框，铺满 WebView */
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
+.app{width:100%;height:100vh;background:var(--bg);overflow:hidden;position:relative;display:flex;flex-direction:column}
+.statusbar{height:32px;display:flex;justify-content:space-between;align-items:center;padding:0 20px;font-size:12px;color:var(--muted);flex:0 0 auto}
+.header{height:48px;display:flex;align-items:center;gap:8px;padding:0 12px;flex:0 0 auto}
+.header h1{font-size:17px;font-weight:600;flex:1}
+.header .back{width:32px;height:32px;border:none;background:transparent;font-size:20px;color:var(--text);display:none;cursor:pointer}
+.header .act{font-size:13px;color:var(--primary);background:none;border:none;cursor:pointer}
+main{flex:1;overflow-y:auto;padding:0 12px 12px;scrollbar-width:none}
+main::-webkit-scrollbar{display:none}
+.page{display:none;padding-bottom:12px}
+.page.active{display:block}
+.tabbar{height:62px;flex:0 0 auto;display:flex;background:var(--card);border-top:1px solid var(--border)}
+.tabbar button{flex:1;border:none;background:none;color:var(--muted);font-size:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}
+.tabbar button .ico{font-size:19px;line-height:1}
+.tabbar button.on{color:var(--primary)}
+.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px;border:1px solid var(--border)}
+.card h3{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;font-size:14px;border-bottom:1px solid var(--border);gap:10px}
+.row:last-child{border-bottom:none}
+.row .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.field{padding:8px 0;border-bottom:1px solid var(--border)}
+.field:last-child{border-bottom:none}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--primary)}
+textarea{min-height:70px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.switch{position:relative;width:44px;height:26px;flex:0 0 44px;cursor:pointer}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:#c8ccd2;border-radius:13px;transition:.2s}
+.switch span::after{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch input:checked+span{background:var(--primary)}
+.switch input:checked+span::after{transform:translateX(18px)}
+.btn{width:100%;padding:12px;border:none;border-radius:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-ghost{background:var(--chip);color:var(--primary)}
+.btn-danger{background:rgba(229,72,77,.12);color:var(--danger)}
+.btn-sm{padding:8px 12px;font-size:12px;width:auto;border-radius:9px}
+.btns{display:flex;gap:8px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--chip);color:var(--primary);border-radius:20px;font-size:11px}
+.tag{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;background:var(--chip);color:var(--primary);margin-right:4px}
+.tag.ok{background:rgba(24,160,88,.12);color:var(--ok)}
+.tag.warn{background:rgba(245,166,35,.15);color:#b37a00}
+.tag.danger{background:rgba(229,72,77,.12);color:var(--danger)}
+details.card>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:"▾";color:var(--muted);font-size:12px;transition:.2s}
+details.card[open]>summary::after{transform:rotate(180deg)}
+details.card>summary+*{margin-top:10px}
+.radio{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px}
+.radio input{width:18px;height:18px;accent-color:var(--primary)}
+.rule{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;font-size:13px;background:var(--bg)}
+.rule .ord{display:flex;flex-direction:column;gap:1px}
+.rule .ord button{border:none;background:transparent;color:var(--muted);font-size:10px;line-height:1;cursor:pointer;padding:1px 3px}
+.rule .name{flex:1}
+.rule input[type=checkbox]{width:16px;height:16px;accent-color:var(--primary)}
+.bar-chart{display:flex;align-items:flex-end;gap:4px;height:70px;margin:10px 0}
+.bar-chart div{flex:1;background:linear-gradient(to top,var(--primary),#7aa2ff);border-radius:3px 3px 0 0;min-height:3px}
+.bar-labels{display:flex;gap:4px;font-size:9px;color:var(--muted);text-align:center}
+.bar-labels span{flex:1}
+.progress{height:9px;background:var(--bg);border-radius:5px;overflow:hidden;margin:8px 0}
+.progress i{display:block;height:100%;background:var(--primary);border-radius:5px;transition:width .4s}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin:8px 0}
+.stat-grid div{background:var(--bg);border-radius:10px;padding:9px 4px}
+.stat-grid b{display:block;font-size:16px}
+.stat-grid small{font-size:10px;color:var(--muted)}
+.log-line{font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:5px 0;border-bottom:1px dashed var(--border);color:var(--muted);display:flex;gap:6px}
+.log-line b{color:var(--text);font-weight:500}
+.log-line.ok b{color:var(--ok)}
+.log-line.fail b{color:var(--danger)}
+.mask-pwd{cursor:pointer;letter-spacing:1px}
+.dict-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start}
+.dict-card .body{flex:1;min-width:0}
+.dict-card .name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+.dict-card .meta{font-size:11px;color:var(--muted);margin-top:4px}
+.dict-card .ops{display:flex;gap:6px;margin-top:8px}
+.dict-card .ops button{border:none;background:var(--chip);color:var(--primary);padding:5px 9px;border-radius:7px;font-size:11px;cursor:pointer}
+.bulkbar{position:sticky;bottom:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px;display:none;gap:6px;margin-top:8px}
+.bulkbar.show{display:flex}
+.bulkbar button{flex:1;font-size:11px}
+.entry{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
+.entry input[type=checkbox]{width:16px;height:16px;accent-color:var(--primary)}
+.entry .pwd{flex:1;font-family:ui-monospace,monospace}
+.entry .st{font-size:10px}
+.toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%) translateY(20px);background:rgba(0,0,0,.82);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:99;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:.2s;z-index:20}
+.overlay.show{opacity:1;pointer-events:auto}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.92);width:300px;background:var(--card);border-radius:16px;padding:18px;z-index:21;opacity:0;pointer-events:none;transition:.2s}
+.modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.modal h4{font-size:15px;margin-bottom:8px}
+.modal p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;white-space:pre-line}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:20px 20px 0 0;padding:16px;transform:translateY(110%);transition:.28s;z-index:21;max-height:70%;overflow-y:auto}
+.sheet.show{transform:translateY(0)}
+.sheet h4{font-size:15px;margin-bottom:10px;display:flex;justify-content:space-between}
+.sheet .item{padding:12px 0;border-bottom:1px solid var(--border);font-size:14px;cursor:pointer;display:flex;justify-content:space-between}
+.hint{font-size:11px;color:var(--muted);line-height:1.6;margin-top:6px}
+.auth-wrap{display:flex;flex-direction:column;justify-content:center;height:100%;padding:20px 8px}
+.auth-wrap h2{font-size:20px;margin-bottom:10px}
+.auth-wrap p{font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:14px}
+.kv{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:4px 0}
+.sec-title{font-size:12px;font-weight:600;color:var(--muted);margin:14px 2px 8px;letter-spacing:.5px}
+.color-dot{width:14px;height:14px;border-radius:50%;display:inline-block}
+/* 白名单表格 */
+.wl-table{border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow:hidden}
+.wl-scroll{scrollbar-width:thin}
+.wl-row{display:flex;align-items:center;gap:6px;padding:9px 8px;border-bottom:1px solid var(--border);font-size:13px;background:var(--card);width:max-content;min-width:100%}
+.wl-row:last-child{border-bottom:none}
+.wl-row .idx{width:22px;flex:0 0 22px;color:var(--muted);font-size:11px;text-align:center}
+.wl-row .ssid{flex:1 0 auto;white-space:nowrap;font-family:ui-monospace,monospace;padding-right:4px}
+.wl-row .sig{flex:0 0 auto;font-size:11px;color:var(--muted);min-width:96px;text-align:right;white-space:nowrap}
+.wl-row .sig b{color:var(--primary);font-weight:600}
+.grade{padding:1px 6px;border-radius:6px;font-size:10px;font-weight:600;margin-right:4px}
+.grade.g1{background:rgba(24,160,88,.16);color:var(--ok)}
+.grade.g2{background:rgba(24,160,88,.12);color:#4d9e66}
+.grade.g3{background:rgba(245,166,35,.16);color:#b37a00}
+.grade.g4{background:rgba(229,72,77,.12);color:var(--danger)}
+.grade.gu{background:var(--chip);color:var(--muted)}
+.wl-row .ord{display:flex;flex-direction:column;gap:1px;flex:0 0 auto}
+.wl-row .ord button{border:none;background:transparent;color:var(--muted);font-size:10px;line-height:1;cursor:pointer;padding:1px 4px}
+.wl-row .del{border:none;background:rgba(229,72,77,.12);color:var(--danger);border-radius:7px;padding:3px 9px;cursor:pointer;font-size:12px;flex:0 0 auto}
+.wl-empty{padding:14px 10px;font-size:12px;color:var(--muted)}
+.wl-more{width:100%;border:none;background:var(--chip);color:var(--primary);padding:9px;font-size:12px;cursor:pointer;border-radius:10px;margin-top:6px}
+.wl-addrow{display:flex;gap:6px;margin-bottom:8px}
+.wl-addrow input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;outline:none}
+.wl-addrow button{border:none;background:var(--chip);color:var(--primary);border-radius:9px;padding:0 14px;font-size:13px;cursor:pointer}
+.preview-box{background:var(--bg);border-radius:10px;padding:10px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.9;color:var(--muted);max-height:150px;overflow-y:auto}
+.perm{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
+.perm:last-child{border:none}
+.perm button{border:none;background:var(--chip);color:var(--primary);padding:5px 10px;border-radius:7px;font-size:11px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="statusbar"><span>9:41</span><span>Wi-Fi · 82%</span></div>
+  <div class="header">
+    <button class="back" id="backBtn" onclick="goBack()">‹</button>
+    <h1 id="pageTitle">Wi-Fi 字典轮询器</h1>
+    <button class="act" id="headerAct" onclick="headerAction()"></button>
+  </div>
+
+  <main id="main">
+
+    <!-- ========== 授权确认 ========== -->
+    <section class="page active" id="page-auth">
+      <div class="auth-wrap">
+        <h2>使用前请确认</h2>
+        <p>本工具仅用于<strong>自有网络</strong>或<strong>已获得书面授权</strong>的网络环境测试。请勿用于任何未经授权的网络访问。</p>
+        <div class="card">
+          <div class="row"><span>合规模式</span><span class="tag ok">强制开启</span></div>
+          <div class="row"><span>尝试次数硬上限</span><span>50 次</span></div>
+          <div class="row"><span>最小尝试间隔下限</span><span>1 秒</span></div>
+          <div class="row"><span>审计日志</span><span class="tag ok">强制记录</span></div>
+        </div>
+        <div class="card">
+          <h3>目标网络白名单 <span class="wl-count">0</span> 个（导入即声明自有或已获授权）</h3>
+          <input type="hidden" id="authWhitelist" value="MyHome_5G, Office_Test">
+          <div class="wl-addrow">
+            <input id="wlAddInput" placeholder="输入 SSID 添加">
+            <button onclick="wlAdd()">添加</button>
+          </div>
+          <div class="wl-table" id="wlTableAuth"><div class="wl-scroll" id="wlScrollAuth"></div></div>
+          <button class="wl-more" id="wlMoreAuth" style="display:none"></button>
+          <div class="btns">
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openWifiPicker()">📡 扫描选择</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openWhitelistImport()">📋 批量导入</button>
+          </div>
+          <div class="btns" style="margin-top:6px">
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlRefreshSignal()">🔄 刷新信号</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlSortBySignal()">⇅ 按信号排序</button>
+          </div>
+          <p class="hint wl-sorthint">点 ⇅ 按信号排序：信号强的排最前（每行左侧标签标明 强/良/中/弱）。</p>
+        </div>
+        <div class="row" style="border:none">
+          <span style="font-size:13px">我已确认仅对自有或已获授权的网络进行测试</span>
+          <label class="switch"><input type="checkbox" id="authCheck"><span></span></label>
+        </div>
+        <button class="btn btn-primary" onclick="doAuth()">进入应用</button>
+        <p class="hint">授权记录将被写入审计日志，可在“设置 › 合规与安全”中查看。</p>
+      </div>
+    </section>
+
+    <!-- ========== 首页 ========== -->
+    <section class="page" id="page-home">
+      <div class="card">
+        <div class="row"><span>合规模式</span><span class="tag ok">已开启 🔒</span></div>
+        <div class="row"><span>授权状态</span><span id="homeAuth" class="tag warn">未确认</span></div>
+        <div class="row"><span>当前网络</span><b>MyHome_5G</b></div>
+        <div class="row"><span>运行状态</span><span id="homeRun" class="tag">未运行</span></div>
+      </div>
+      <div class="btns">
+        <button class="btn btn-ghost" onclick="openSheet()">选择目标网络</button>
+        <button class="btn btn-primary" onclick="go('task','新建轮询任务')">选择字典并开始</button>
+      </div>
+      <div class="sec-title">最近任务</div>
+      <div class="card">
+        <div class="row"><div><div>MyHome_5G</div><div class="sub">2 分钟前 · 第 3 条命中</div></div><span class="tag ok">成功</span></div>
+        <div class="row"><div><div>Office_Test</div><div class="sub">昨天 18:20 · 已尝试 50 条</div></div><span class="tag">已停止</span></div>
+      </div>
+      <div class="sec-title">快捷操作</div>
+      <div class="btns">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="go('dict','字典库')">导入字典</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="go('task','新建轮询任务')">新建任务</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="go('log','运行日志')">查看日志</button>
+      </div>
+    </section>
+
+    <!-- ========== 任务配置 ========== -->
+    <section class="page" id="page-task">
+      <details class="card" open>
+        <summary>目标网络</summary>
+        <div class="radio"><input type="radio" name="target" id="targetCur" checked> 当前 Wi-Fi：MyHome_5G</div>
+        <div class="radio"><input type="radio" name="target" id="targetManual"> 手动输入 SSID</div>
+        <input type="text" id="manualSsid" placeholder="输入 SSID" style="margin:4px 0 8px 26px;width:calc(100% - 26px)">
+        <div class="radio"><input type="radio" name="target" id="targetWl"> 从白名单选择</div>
+        <select id="wlSelect" style="margin-left:26px;width:calc(100% - 26px)"><option>Office_Test</option><option>Lab_Guest</option></select>
+        <div class="radio"><input type="radio" name="target" id="targetAll"> 白名单全部（按顺序，<span id="tAllCount">0</span> 个 · 信号优先）</div>
+        <div class="field" style="margin-top:8px"><label>安全类型</label>
+          <select><option>自动识别</option><option>WPA2</option><option>WPA3</option><option>WEP</option><option>开放</option></select>
+        </div>
+      </details>
+
+      <details class="card" open>
+        <summary>字典与轮询策略</summary>
+        <div class="rule"><span class="name">1. 常用弱口令库 <span class="tag">320 条</span></span>
+          <label class="switch"><input type="checkbox" checked><span></span></label>
+          <div class="ord"><button onclick="moveRule(this,-1)">▲</button><button onclick="moveRule(this,1)">▼</button></div>
+        </div>
+        <div class="rule"><span class="name">2. 家庭生日规则 <span class="tag">150 条</span></span>
+          <label class="switch"><input type="checkbox" checked><span></span></label>
+          <div class="ord"><button onclick="moveRule(this,-1)">▲</button><button onclick="moveRule(this,1)">▼</button></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="go('dict','字典库')">+ 添加字典</button>
+        <div class="grid2" style="margin-top:10px">
+          <div class="field"><label>轮询方式</label><select><option>顺序</option><option>随机</option><option>权重</option></select></div>
+          <div class="field"><label>命中后</label><select id="onHitSelect"><option value="stop">停止</option><option value="continue">继续并记录</option></select></div>
+          <div class="field"><label>循环轮数</label><input type="number" value="1"></div>
+          <div class="field"><label>最大尝试数</label><input type="number" value="50"></div>
+          <div class="field"><label>每次间隔 (s)</label><input type="number" value="3"></div>
+          <div class="field"><label>失败冷却 (s)</label><input type="number" value="5"></div>
+        </div>
+      </details>
+
+      <details class="card">
+        <summary>连接与判定</summary>
+        <div class="grid2">
+          <div class="field"><label>连接超时 (s)</label><input type="number" value="15"></div>
+          <div class="field"><label>元素等待 (s)</label><input type="number" value="8"></div>
+          <div class="field"><label>失败重试</label><input type="number" value="1"></div>
+        </div>
+        <div class="row"><span>验证互联网连通</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>失败后忘记网络</span><label class="switch"><input type="checkbox"><span></span></label></div>
+      </details>
+
+      <details class="card">
+        <summary>运行环境</summary>
+        <div class="row"><span>前台服务</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>悬浮窗</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>屏幕常亮</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>锁屏继续</span><label class="switch"><input type="checkbox"><span></span></label></div>
+        <div class="row"><span>低电量暂停</span><input type="number" value="20" style="width:80px;text-align:right"></div>
+        <div class="row"><span>温度过高暂停</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+      </details>
+
+      <div class="btns">
+        <button class="btn btn-ghost" onclick="toast('已保存为模板')">保存为模板</button>
+        <button class="btn btn-primary" onclick="confirmStart()">开始任务</button>
+      </div>
+    </section>
+
+    <!-- ========== 运行监控 ========== -->
+    <section class="page" id="page-run">
+      <div class="card">
+        <div class="row"><span>目标网络</span><b id="runTarget">MyHome_5G</b></div>
+        <div class="row"><span>状态</span><span id="runStatus" class="tag warn">运行中</span></div>
+        <div class="progress"><i id="runBar" style="width:0%"></i></div>
+        <div class="stat-grid">
+          <div><b id="runCount">0/50</b><small>进度</small></div>
+          <div><b id="runSpeed">0/分</b><small>速度</small></div>
+          <div><b id="runTime">00:00</b><small>用时</small></div>
+        </div>
+        <div class="row"><span>当前密码</span><span class="mask-pwd" id="curPwd" onclick="togglePwd()">••••••</span></div>
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" id="pauseRunBtn" onclick="togglePauseRun()">⏸ 暂停</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('已跳过当前')">⏭ 跳过</button>
+          <button class="btn btn-danger btn-sm" style="flex:1" onclick="stopRun()">⏹ 停止</button>
+        </div>
+      </div>
+      <div class="sec-title">实时日志</div>
+      <div class="card" id="runLog" style="max-height:230px;overflow-y:auto"></div>
+    </section>
+
+    <!-- ========== 字典库 ========== -->
+    
+    <section class="page" id="page-dict">
+      <div class="card">
+        <div class="kv"><span>字典总数</span><span id="dsCount">0 个</span></div>
+        <div class="kv"><span>总条数</span><span id="dsEntries">0</span></div>
+        <div class="kv"><span>启用中</span><span id="dsEnabled">0 个</span></div>
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openNewDict()">➕ 新建</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openDlImport()">📥 从 Download 导入</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="refreshDicts()">🔄 刷新</button>
+        </div>
+        <p class="hint">字典 = dicts/ 目录下的 txt 文件（一行一条）；启用的字典才参与轮询候选。</p>
+      </div>
+      <div id="dictList"></div>
+
+      <div class="sheet" id="newDictSheet">
+        <h4>新建字典 <span onclick="closeSheet('newDictSheet')" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
+        <div class="field"><label>字典名称（用作文件名）</label><input type="text" id="ndName" placeholder="如：景区客房常用"></div>
+        <div class="btns"><button class="btn btn-primary" onclick="createDict()">创建</button></div>
+      </div>
+      <div class="sheet" id="dlSheet">
+        <h4>从 Download 导入 txt <span onclick="closeSheet('dlSheet')" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
+        <div id="dlList"><p class="hint" style="text-align:center;padding:16px 0">加载中…</p></div>
+      </div>
+    </section>
+
+    <!-- ========== 字典编辑 ========== -->
+    
+    <section class="page" id="page-dictEdit">
+      <div class="card">
+        <div class="field"><label>字典名称</label><input type="text" id="deName" readonly style="opacity:.7"></div>
+        <div class="field"><label>描述</label><input type="text" id="deDesc" placeholder="用途备注"></div>
+        <div class="row"><span>启用（参与轮询候选）</span><label class="switch"><input type="checkbox" id="deEnabled"><span></span></label></div>
+        <div class="kv"><span>条数 / 去重后</span><span id="deStats">0 / 0</span></div>
+      </div>
+      <div class="card">
+        <div class="field"><label>内容（每行一条，保存时自动去空行+去重）</label>
+          <textarea id="deContent" style="min-height:180px" placeholder="password1&#10;password2"></textarea></div>
+        <div class="btns">
+          <button class="btn btn-primary" onclick="saveDictEdit()">💾 保存字典</button>
+          <button class="btn btn-ghost" onclick="openDicts()">↩ 返回列表</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 条目编辑 ========== -->
+    
+    <section class="page" id="page-entries">
+      <div class="card">
+        <div class="kv"><span>字典</span><span id="enName">-</span></div>
+        <div class="kv"><span>条数</span><span id="enCount">0</span></div>
+        <div class="btns">
+          <button class="btn btn-danger btn-sm" style="flex:1" onclick="deleteSelectedEntries()">🗑 删除选中</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openDicts()">↩ 返回列表</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0"><div id="entryList" style="max-height:440px;overflow-y:auto"></div></div>
+    </section>
+
+    <!-- ========== 生成器 ========== -->
+        <section class="page" id="page-gen">
+      <div class="card">
+        <div class="field"><label>基础词（逗号分隔）</label><input type="text" id="genBases" value="home, family, wifi"></div>
+        <div class="field"><label>追加用变量值（逗号分隔，与基础词组合）</label><input type="text" id="genVars" value="2024, 0101, 8888"></div>
+        <div class="field"><label>变换规则</label>
+          <div style="display:flex;flex-direction:column;gap:4px;font-size:13px">
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="genTCase" checked> 大小写变体（原样 / 首字母大写 / 全大写）</label>
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="genTDigits" checked> 追加数字（每个词 × 每个变量值）</label>
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="genTLeet"> 替换字符（o→0 i→1 e→3 a→@）</label>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>最小长度</label><input type="number" id="genMin" value="6"></div>
+          <div class="field"><label>最大长度</label><input type="number" id="genMax" value="16"></div>
+        </div>
+        <div class="field"><label>生成数量上限</label><input type="number" id="genLimit" value="500"></div>
+        <div class="field"><label>保存为新字典（名称）</label><input type="text" id="genName" placeholder="如：生成-景区常用"></div>
+        <div class="btns">
+          <button class="btn btn-ghost" onclick="runGenPreview()">⚡ 生成预览</button>
+          <button class="btn btn-primary" onclick="saveGenerated()">💾 保存到新字典</button>
+        </div>
+        <div class="kv"><span>生成条数 / 去重后</span><span id="genStats">0 / 0</span></div>
+        <div class="preview-box" id="genPreview" style="max-height:200px">点「生成预览」查看结果（仅预览，不自动保存）</div>
+        <p class="hint">生成结果不会自动参与轮询，需保存为新字典并启用。</p>
+      </div>
+    </section>
+
+    <!-- ========== 日志 ========== -->
+    <section class="page" id="page-log">
+      <div class="card">
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="refreshLogs()">🔄 刷新</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="exportLogs()">📤 导出到 Download</button>
+          <button class="btn btn-danger btn-sm" style="flex:1" onclick="clearRuntimeLog()">🧹 清空运行日志</button>
+        </div>
+        <p class="hint">运行日志记录每次尝试（可清空）；审计日志由合规层强制记录（授权/任务起止/白名单变更/命中），不可修改。</p>
+      </div>
+      <div class="sec-title">运行日志 · runtime.log</div>
+      <div class="card" style="padding:0"><div id="logRuntime" style="max-height:240px;overflow-y:auto;overflow-x:auto"><div class="wl-empty">暂无</div></div></div>
+      <div class="sec-title">审计日志 · audit.log（强制记录）</div>
+      <div class="card" style="padding:0"><div id="logAudit" style="max-height:240px;overflow-y:auto;overflow-x:auto"><div class="wl-empty">暂无</div></div></div>
+    </section>
+
+    <!-- ========== 设置 ========== -->
+    <section class="page" id="page-set">
+      <details class="card">
+        <summary>1 · 默认任务策略</summary>
+        <div class="grid2">
+          <div class="field"><label>默认轮询方式</label><select><option>顺序</option><option>随机</option><option>权重</option></select></div>
+          <div class="field"><label>命中后</label><select><option>停止</option><option>继续记录</option></select></div>
+          <div class="field"><label>循环轮数</label><input type="number" value="1"></div>
+          <div class="field"><label>最大尝试数</label><input type="number" value="50"></div>
+          <div class="field"><label>每次间隔 (s)</label><input type="number" value="3"></div>
+          <div class="field"><label>失败冷却 (s)</label><input type="number" value="5"></div>
+          <div class="field"><label>连接超时 (s)</label><input type="number" value="15"></div>
+          <div class="field"><label>元素等待 (s)</label><input type="number" value="8"></div>
+        </div>
+        <div class="row"><span>验证互联网连通</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>失败后忘记网络</span><label class="switch"><input type="checkbox"><span></span></label></div>
+      </details>
+
+      <details class="card">
+        <summary>2 · 字典默认规则</summary>
+        <div class="row"><span>默认去重方式</span><select style="width:130px"><option>完全重复</option><option>忽略大小写</option></select></div>
+        <div class="row"><span>默认排序</span><select style="width:130px"><option>原始顺序</option><option>长度升序</option><option>随机</option></select></div>
+        <div class="row"><span>默认编码</span><select style="width:130px"><option>UTF-8</option><option>GBK</option></select></div>
+        <div class="row"><span>默认遮罩显示</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>默认加密存储</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>自动备份字典</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="field"><label>默认导入目录</label><input type="text" value="/Download/dicts"></div>
+      </details>
+
+      <details class="card">
+        <summary>3 · 运行与通知</summary>
+        <div class="row"><span>前台服务通知</span><select style="width:130px"><option>标准</option><option>简洁</option><option>静默</option></select></div>
+        <div class="row"><span>悬浮窗</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>悬浮窗位置</span><select style="width:130px"><option>右上</option><option>右下</option><option>左侧</option></select></div>
+        <div class="row"><span>锁屏继续</span><label class="switch"><input type="checkbox"><span></span></label></div>
+        <div class="row"><span>屏幕常亮</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>低电量阈值</span><input type="number" value="20" style="width:70px;text-align:right"></div>
+        <div class="row"><span>温度保护</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>Wi-Fi 开关策略</span><select style="width:130px"><option>保持开启</option><option>自动重开</option></select></div>
+      </details>
+
+      <details class="card">
+        <summary>4 · 权限向导</summary>
+        <div class="perm"><span>无障碍服务</span><button onclick="toast('跳转系统设置')">去开启</button></div>
+        <div class="perm"><span>悬浮窗权限</span><button onclick="toast('跳转系统设置')">去开启</button></div>
+        <div class="perm"><span>通知权限</span><button onclick="toast('已授权')">已开启</button></div>
+        <div class="perm"><span>存储 / 文件访问</span><button onclick="toast('已授权')">已开启</button></div>
+        <div class="perm"><span>电池优化白名单</span><button onclick="toast('跳转系统设置')">去开启</button></div>
+      </details>
+
+      <details class="card">
+        <summary>5 · 外观与交互</summary>
+        <div class="row"><span>主题</span>
+          <select style="width:130px" onchange="setTheme(this.value)">
+            <option value="light">浅色</option><option value="dark">深色</option><option value="system">跟随系统</option>
+          </select>
+        </div>
+        <div class="row"><span>主色</span><input type="color" value="#2f6bff" style="width:40px;height:28px;border:none;background:none"></div>
+        <div class="row"><span>字体大小</span><select style="width:130px"><option>标准</option><option>大</option><option>特大</option></select></div>
+        <div class="row"><span>卡片密度</span><select style="width:130px"><option>标准</option><option>紧凑</option><option>宽松</option></select></div>
+        <div class="row"><span>语言</span><select style="width:130px"><option>简体中文</option><option>English</option></select></div>
+        <div class="field"><label>底部 Tab 顺序（逗号分隔）</label><input type="text" value="首页, 任务, 字典, 日志, 设置"></div>
+        <div class="field"><label>首页快捷按钮</label><input type="text" value="导入字典, 新建任务, 日志"></div>
+        <div class="field"><label>日志默认字段</label><input type="text" value="时间, 结果, 耗时, 序号"></div>
+        <div class="row"><span>密码默认遮罩时长</span><select style="width:130px"><option>始终遮罩</option><option>点击显示 5s</option><option>点击显示 10s</option></select></div>
+      </details>
+
+      <details class="card">
+        <summary>6 · 数据与备份</summary>
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('配置已导出 JSON')">导出配置</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('请选择配置文件')">导入配置</button>
+        </div>
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('字典已备份')">备份字典</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('请选择备份文件')">恢复字典</button>
+        </div>
+        <div class="row"><span>自动备份周期</span><select style="width:130px"><option>每天</option><option>每 3 天</option><option>每周</option><option>关闭</option></select></div>
+        <div class="row"><span>清空日志</span><button class="btn btn-danger btn-sm" onclick="toast('已清空日志')">清空</button></div>
+        <div class="row"><span>清空字典</span><button class="btn btn-danger btn-sm" onclick="toast('需二次确认')">清空</button></div>
+      </details>
+
+      <details class="card">
+        <summary>7 · 合规与安全</summary>
+        <div class="row"><span>授权确认记录</span><span class="tag ok">已记录</span></div>
+        <div class="wl-addrow">
+          <input id="wlAddInputSet" placeholder="输入 SSID 添加">
+          <button onclick="wlAddSet()">添加</button>
+        </div>
+        <div class="wl-table"><div class="wl-scroll" id="wlScrollSet"></div></div>
+        <button class="wl-more" id="wlMoreSet" style="display:none"></button>
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openWifiPicker()">📡 扫描选择</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openWhitelistImport()">📋 批量导入</button>
+        </div>
+        <div class="btns" style="margin-top:6px">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlRefreshSignal()">🔄 刷新信号</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlSortBySignal()">⇅ 按信号排序</button>
+        </div>
+        <p class="hint wl-sorthint">点 ⇅ 按信号排序：信号强的排最前（每行左侧标签标明 强/良/中/弱）。</p>
+        <div class="row"><span>最大尝试次数硬上限</span><input type="number" value="50" style="width:70px;text-align:right"></div>
+        <div class="row"><span>最小尝试间隔下限 (s)</span><input type="number" value="1" style="width:70px;text-align:right"></div>
+        <div class="row"><span>审计日志</span><label class="switch"><input type="checkbox" checked disabled><span></span></label></div>
+        <div class="row"><span>任务前二次确认</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>禁止导出敏感字段</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+      </details>
+
+      <details class="card">
+        <summary>8 · 高级</summary>
+        <div class="field"><label>脚本钩子：任务开始</label><textarea placeholder="// 在此编写用户脚本"></textarea></div>
+        <div class="field"><label>脚本钩子：每次尝试</label><textarea placeholder="// 在此编写用户脚本"></textarea></div>
+        <div class="field"><label>脚本钩子：成功 / 失败</label><textarea placeholder="// 在此编写用户脚本"></textarea></div>
+        <div class="btns">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('变量与模板管理')">变量与模板</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('配置模板管理')">配置模板</button>
+        </div>
+        <div class="row"><span>调试模式</span><label class="switch"><input type="checkbox"><span></span></label></div>
+        <div class="row"><span>日志级别</span><select style="width:130px"><option>普通</option><option>详细</option><option>调试</option></select></div>
+      </details>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="home" class="on" onclick="go('home','Wi-Fi 字典轮询器')"><span class="ico">🏠</span>首页</button>
+    <button data-tab="task" onclick="go('task','新建轮询任务')"><span class="ico">📋</span>任务</button>
+    <button data-tab="dict" onclick="go('dict','字典库')"><span class="ico">📚</span>字典</button>
+    <button data-tab="log" onclick="go('log','运行日志')"><span class="ico">📜</span>日志</button>
+    <button data-tab="set" onclick="go('set','设置')"><span class="ico">⚙️</span>设置</button>
+  </nav>
+
+  <div class="overlay" id="overlay" onclick="closeAll()"></div>
+  <div class="modal" id="modal">
+    <h4 id="modalTitle">确认</h4>
+    <p id="modalBody"></p>
+    <div class="btns">
+      <button class="btn btn-ghost" onclick="closeAll()">取消</button>
+      <button class="btn btn-primary" id="modalOk">确认</button>
+    </div>
+  </div>
+  <div class="sheet" id="sheet">
+    <h4>选择目标网络 <span onclick="closeAll()" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
+    <div class="item" onclick="pickNet('MyHome_5G')">MyHome_5G <span class="tag ok">白名单</span></div>
+    <div class="item" onclick="pickNet('Office_Test')">Office_Test <span class="tag ok">白名单</span></div>
+    <div class="item" onclick="pickNet('Lab_Guest')">Lab_Guest <span class="tag">未授权</span></div>
+  </div>
+  <div class="sheet" id="wifiSheet">
+    <h4>选择白名单网络 · 附近扫描
+      <span onclick="closeWifiSheet()" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span>
+    </h4>
+    <div class="row"><span><b>全选</b>（当前共 <span id="wifiCount">0</span> 个）</span>
+      <label class="switch"><input type="checkbox" id="wifiAll" onchange="toggleAllWifi(this.checked)"><span></span></label>
+    </div>
+    <div id="wifiList" style="max-height:300px;overflow-y:auto"></div>
+    <div class="btns">
+      <button class="btn btn-ghost" onclick="rescanWifi()">🔄 重新扫描</button>
+      <button class="btn btn-primary" onclick="applyWifiSelection()">应用所选</button>
+    </div>
+    <p class="hint" id="wifiHint">仅可将你自有或已获书面授权的网络加入白名单。</p>
+  </div>
+  <div class="sheet" id="wlImportSheet">
+    <h4>批量导入白名单
+      <span onclick="closeWlImport()" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span>
+    </h4>
+    <div class="field"><label>每行一个 SSID（也支持逗号分隔）</label><textarea id="wlImportText" placeholder="景区-AP-01&#10;景区-AP-02&#10;..."></textarea></div>
+    <div class="btns">
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlImportFile()">📄 从文件导入</button>
+      <button class="btn btn-primary btn-sm" style="flex:1" onclick="wlImportApply()">合并入白名单</button>
+    </div>
+    <p class="hint">合并时自动去重（忽略大小写）；导入即声明这些网络为你自有或已获授权，审计日志将记录本次变更。</p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 路由 ---------- */
+const PAGE_TAB = {home:'home',task:'task',run:'task',dict:'dict',dictEdit:'dict',entries:'dict',gen:'dict',log:'log',set:'set',auth:''};
+let curPage = 'auth';
+const backStack = []; // 多级返回栈：字典 → 编辑 → 条目 逐层返回
+
+function go(id, title, fromBack){
+  if(!fromBack && curPage !== id) backStack.push(curPage);
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const el = document.getElementById('page-'+id);
+  if(el) el.classList.add('active');
+  curPage = id;
+  document.getElementById('pageTitle').textContent = title || '';
+  document.getElementById('backBtn').style.display = (id==='auth')?'none':'block';
+  document.querySelectorAll('.tabbar button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.tab === PAGE_TAB[id]);
+  });
+  document.getElementById('main').scrollTop = 0;
+  // 进入日志页自动拉取最新日志
+  if(id==='log' && window.__AUTOX) nativeSend('get_logs');
+  if(id==='dict') refreshDicts();
+}
+function goBack(){
+  __webBack();
+}
+/* 统一返回入口：弹层开着先关弹层，否则回上一页；栈空返回 false（供原生决定是否退出） */
+window.__webBack = function(){
+  const ov = document.getElementById('overlay');
+  if(ov.classList.contains('show')){ closeAll(); return true; }
+  if(backStack.length){
+    const prev = backStack.pop();
+    go(prev, titleOf(prev), true);
+    return true;
+  }
+  return false;
+}
+function titleOf(id){
+  return {home:'Wi-Fi 字典轮询器',task:'新建轮询任务',run:'运行监控',dict:'字典库',dictEdit:'编辑字典',entries:'条目编辑',gen:'字典生成器',log:'运行日志',set:'设置'}[id]||'';
+}
+function headerAction(){}
+
+/* ---------- 授权 ---------- */
+function doAuth(){
+  if(!document.getElementById('authCheck').checked){ toast('请先勾选授权确认'); return; }
+  document.getElementById('homeAuth').textContent = '已确认';
+  document.getElementById('homeAuth').className = 'tag ok';
+  syncWhitelistToNative();
+  go('home','Wi-Fi 字典轮询器');
+  toast('授权已记录');
+}
+
+/* ---------- 通用组件 ---------- */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+function closeAll(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('modal').classList.remove('show');
+  document.getElementById('sheet').classList.remove('show');
+  document.getElementById('wifiSheet').classList.remove('show');
+  document.getElementById('newDictSheet').classList.remove('show');
+  document.getElementById('dlSheet').classList.remove('show');
+  document.getElementById('wlImportSheet').classList.remove('show');
+}
+function openModal(title, body, okText, onOk){
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').textContent = body;
+  const ok = document.getElementById('modalOk');
+  ok.textContent = okText || '确认';
+  ok.onclick = ()=>{ closeAll(); onOk && onOk(); };
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('modal').classList.add('show');
+}
+function openSheet(){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+}
+function pickNet(name){ closeAll(); toast('已选择：'+name); }
+
+/* ---------- 规则上下移动 ---------- */
+function moveRule(btn, dir){
+  const rule = btn.closest('.rule');
+  const parent = rule.parentNode;
+  if(dir < 0 && rule.previousElementSibling && rule.previousElementSibling.classList.contains('rule')){
+    parent.insertBefore(rule, rule.previousElementSibling);
+  } else if(dir > 0 && rule.nextElementSibling && rule.nextElementSibling.classList.contains('rule')){
+    parent.insertBefore(rule.nextElementSibling, rule);
+  }
+}
+
+/* ---------- 字典批量 ---------- */
+function toggleBulk(){
+  const any = [...document.querySelectorAll('#page-dict .dict-card input[type=checkbox]')].some(c=>c.checked);
+  document.getElementById('bulkbar').classList.toggle('show', any);
+}
+
+/* ---------- 主题 ---------- */
+function setTheme(v){
+  if(v==='dark') document.body.classList.add('dark');
+  else if(v==='light') document.body.classList.remove('dark');
+  else {
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.body.classList.toggle('dark', dark);
+  }
+}
+
+/* ---------- 原生桥（AutoX.js WebView 环境） ---------- */
+/* WebView UA 含 "; wv)"，浏览器没有。浏览器里命令无人消费，走模拟路径 */
+window.__AUTOX = /;\s*wv\)/i.test(navigator.userAgent);
+window.__cmdQueue = [];           // UI → 原生命令队列，由 main.js 轮询取走
+function nativeSend(cmd, payload){
+  window.__cmdQueue.push({cmd: cmd, payload: payload || null});
+}
+function currentSsid(){
+  const rows = document.querySelectorAll('#page-home .card b');
+  return (rows[0] && rows[0].textContent) || 'MyHome_5G';
+}
+/* ---------- 白名单状态层（单一数据源：隐藏字段 authWhitelist） ---------- */
+function parseSsidList(raw){
+  return (raw || '').split(/[\n\r,，、]+/).map(s=>s.trim()).filter(Boolean);
+}
+function mergeUnique(a, b){
+  const seen = Object.create(null);
+  return a.concat(b).filter(function(s){
+    const k = s.toLowerCase();
+    if(seen[k]) return false;
+    seen[k] = true;
+    return true;
+  });
+}
+function getWL(){
+  return parseSsidList((document.getElementById('authWhitelist') || {value:''}).value);
+}
+function setWL(list, skipNative){
+  document.getElementById('authWhitelist').value = (list || []).join(', ');
+  renderWhitelist();
+  persistCfg();
+  if(!skipNative && window.__AUTOX) nativeSend('set_whitelist', {list: list || []});
+}
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+let wlExpanded = false;
+let WL_SCAN = {}; // ssid(lower) → {level, security}，来自最近一次扫描快照
+function gradeOf(level){
+  if(level >= -55) return ['强', 'g1'];
+  if(level >= -67) return ['良', 'g2'];
+  if(level >= -78) return ['中', 'g3'];
+  return ['弱', 'g4'];
+}
+function sigHtml(s){
+  const info = WL_SCAN[s.toLowerCase()];
+  if(!info) return '<span class="sig"><span class="grade gu">未扫描</span></span>';
+  const g = gradeOf(info.level);
+  return '<span class="sig"><span class="grade ' + g[1] + '">' + g[0] + '</span>'
+    + '<b>' + signalBars(info.level) + '</b> ' + info.level + 'dBm</span>';
+}
+function wlRowHtml(s, i){
+  return '<div class="wl-row">'
+    + '<span class="idx">' + (i + 1) + '</span>'
+    + '<span class="ssid">' + escHtml(s) + '</span>'
+    + sigHtml(s)
+    + '<span class="ord"><button onclick="wlMove(' + i + ',-1)">▲</button><button onclick="wlMove(' + i + ',1)">▼</button></span>'
+    + '<button class="del" onclick="wlDel(' + i + ')">✕</button>'
+    + '</div>';
+}
+function renderWhitelist(){
+  const list = getWL();
+  document.querySelectorAll('.wl-count').forEach(function(el){ el.textContent = list.length; });
+  const tAll = document.getElementById('tAllCount');
+  if(tAll) tAll.textContent = list.length;
+  [['wlScrollAuth','wlMoreAuth'],['wlScrollSet','wlMoreSet']].forEach(function(ids){
+    const tb = document.getElementById(ids[0]);
+    if(!tb) return;
+    const more = document.getElementById(ids[1]);
+    const shown = wlExpanded ? list : list.slice(0, 5);
+    tb.innerHTML = shown.length
+      ? shown.map(function(s, i){ return wlRowHtml(s, i); }).join('')
+      : '<div class="wl-empty">白名单为空：手动添加、扫描选择或批量导入。</div>';
+    tb.parentElement.style.maxHeight = wlExpanded ? '240px' : 'none';
+    tb.parentElement.style.overflowY = wlExpanded ? 'auto' : 'hidden';
+    tb.parentElement.style.overflowX = 'auto'; // 横向滚动：长 SSID 不截断
+    if(list.length > 5){
+      more.style.display = 'block';
+      more.textContent = wlExpanded ? '收起 ▴' : '展开更多（共 ' + list.length + ' 个）▾';
+      more.onclick = function(){ wlExpanded = !wlExpanded; renderWhitelist(); };
+    } else {
+      more.style.display = 'none';
+    }
+  });
+}
+function wlRefreshSignal(){
+  if(window.__AUTOX){
+    nativeSend('scan_wifi');
+    toast('正在刷新信号…（2–3 秒）');
+  } else {
+    toast('浏览器预览：模拟刷新');
+    const demo = [
+      {ssid:'MyHome_5G', level:-52, security:'WPA2'},
+      {ssid:'Office_Test', level:-64, security:'WPA3'},
+      {ssid:'Neighbour_2G', level:-75, security:'WPA2'},
+      {ssid:'CoffeeShop_Free', level:-81, security:'开放'},
+    ];
+    demo.forEach(function(n){
+      WL_SCAN[n.ssid.toLowerCase()] = {level: n.level, security: n.security};
+    });
+    renderWhitelist();
+    renderWifiList(demo);
+  }
+}
+function doSort(){
+  const list = getWL();
+  const known = list.filter(function(s){ return WL_SCAN[s.toLowerCase()] != null; });
+  if(!known.length){ toast('扫描不到这些网络的信号，保持原顺序'); return; }
+  known.sort(function(a, b){
+    return WL_SCAN[b.toLowerCase()].level - WL_SCAN[a.toLowerCase()].level;
+  });
+  const unknown = list.filter(function(s){ return WL_SCAN[s.toLowerCase()] == null; });
+  setWL(known.concat(unknown));
+  const tip = '当前顺序：信号 强 → 弱' + (unknown.length ? '（未扫描的排最后）' : '');
+  document.querySelectorAll('.wl-sorthint').forEach(function(el){ el.textContent = tip; });
+  toast('已按信号排序：强的在前，弱的在后');
+}
+let wlSortPending = false;
+function wlSortBySignal(){
+  // 已有信号数据 → 直接排；没有 → 自动扫描后排序（不用先手点刷新）
+  if(getWL().some(function(s){ return WL_SCAN[s.toLowerCase()] != null; })){
+    doSort();
+    return;
+  }
+  if(window.__AUTOX){
+    wlSortPending = true;
+    nativeSend('scan_wifi');
+    toast('正在扫描信号，完成后自动排序…');
+  } else {
+    wlRefreshSignal(); // 浏览器预览：注入模拟信号
+    doSort();
+  }
+}
+function wlMove(i, dir){
+  const list = getWL();
+  const j = i + dir;
+  if(j < 0 || j >= list.length) return;
+  const tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+  setWL(list);
+}
+function wlDel(i){
+  setWL(getWL().filter(function(_, idx){ return idx !== i; }));
+  toast('已删除：第 ' + (i + 1) + ' 行');
+}
+function wlAddFrom(inputId){
+  const el = document.getElementById(inputId);
+  const v = (el.value || '').trim();
+  if(!v){ toast('请输入 SSID'); return; }
+  setWL(mergeUnique(getWL(), [v]));
+  el.value = '';
+  toast('已添加：' + v);
+}
+function wlAdd(){ wlAddFrom('wlAddInput'); }
+function wlAddSet(){ wlAddFrom('wlAddInputSet'); }
+
+/* ---------- 白名单 WiFi 选择器（附近扫描） ---------- */
+let wifiScanning = false;
+
+function signalBars(level){
+  if(level >= -55) return '▂▄▆█';
+  if(level >= -67) return '▂▄▆_';
+  if(level >= -78) return '▂▄__';
+  return '▂___';
+}
+function openWifiPicker(){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('wifiSheet').classList.add('show');
+  rescanWifi();
+}
+function closeWifiSheet(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('wifiSheet').classList.remove('show');
+}
+function rescanWifi(){
+  wifiScanning = true;
+  document.getElementById('wifiCount').textContent = '0';
+  document.getElementById('wifiHint').textContent = '正在扫描附近 WiFi…（多轮合并约需 12 秒）';
+  document.getElementById('wifiList').innerHTML = '<p class="hint" style="text-align:center;padding:20px 0">🔄 扫描中…</p>';
+  if(window.__AUTOX){
+    nativeSend('scan_wifi');
+    setTimeout(()=>{ // 原生 8 秒无响应则提示
+      if(wifiScanning){
+        wifiScanning = false;
+        document.getElementById('wifiList').innerHTML = '<p class="hint">未收到扫描结果。请检查：① AutoX.js 已授予「位置信息」权限 ② 系统定位服务已开启 ③ 稍后点「重新扫描」。</p>';
+      }
+    }, 20000);
+  } else {
+    // 浏览器预览模式：模拟几个条目以便查看布局
+    setTimeout(()=>{
+      wifiScanning = false;
+      renderWifiList([
+        {ssid:'MyHome_5G', level:-52, security:'WPA2'},
+        {ssid:'Office_Test', level:-64, security:'WPA3'},
+        {ssid:'Neighbour_2G', level:-75, security:'WPA2'},
+        {ssid:'CoffeeShop_Free', level:-81, security:'开放'},
+      ]);
+    }, 600);
+  }
+}
+function renderWifiList(networks){
+  wifiScanning = false;
+  // 排除已在白名单中的网络（大小写不敏感）；信号快照不受影响（白名单表格信号列仍可用）
+  const wl = getWL().map(function(s){ return s.toLowerCase(); });
+  const shown = networks.filter(function(n){
+    return wl.indexOf(n.ssid.toLowerCase()) < 0;
+  });
+  document.getElementById('wifiCount').textContent = shown.length;
+  const box = document.getElementById('wifiList');
+  if(!networks.length){
+    document.getElementById('wifiHint').textContent = '扫描不到网络：请确认系统定位服务已开启、AutoX.js 已获「位置信息」权限后重试。';
+    box.innerHTML = '';
+    return;
+  }
+  if(!shown.length){
+    document.getElementById('wifiHint').textContent = '附近扫描到的网络均已在白名单中，无需重复添加。';
+    box.innerHTML = '';
+    return;
+  }
+  document.getElementById('wifiHint').textContent = '已按信号强度排序（最强在前），已过滤白名单中已有的网络。';
+  box.innerHTML = shown.map((n,i)=>`
+    <div class="entry" style="gap:8px">
+      <input type="checkbox" class="wifi-ck" data-ssid="${escHtml(n.ssid)}" onchange="syncWifiAll()">
+      <span style="flex:1;min-width:0">${escHtml(n.ssid)}</span>
+      <span class="tag">${n.security}</span>
+      <span style="font-size:11px;color:var(--muted)">${signalBars(n.level)}</span>
+    </div>`).join('');
+}
+function toggleAllWifi(on){
+  document.querySelectorAll('#wifiList .wifi-ck').forEach(c=>c.checked = on);
+}
+function syncWifiAll(){
+  const cks = [...document.querySelectorAll('#wifiList .wifi-ck')];
+  document.getElementById('wifiAll').checked = cks.length > 0 && cks.every(c=>c.checked);
+}
+function applyWifiSelection(){
+  const picked = [...document.querySelectorAll('#wifiList .wifi-ck')]
+    .filter(c=>c.checked).map(c=>c.dataset.ssid);
+  if(!picked.length){ toast('请先勾选网络'); return; }
+  setWL(mergeUnique(getWL(), picked));
+  closeWifiSheet();
+  toast('白名单已合并：' + picked.length + ' 个网络');
+}
+function syncWhitelistToNative(){
+  if(window.__AUTOX) nativeSend('set_whitelist', {list: getWL()});
+}
+
+/* ---------- 白名单批量导入 ---------- */
+function openWhitelistImport(){
+  document.getElementById('wlImportText').value = getWL().join('\n');
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('wlImportSheet').classList.add('show');
+}
+function closeWlImport(){
+  document.getElementById('wlImportSheet').classList.remove('show');
+}
+function wlImportApply(){
+  const merged = mergeUnique(getWL(), parseSsidList(document.getElementById('wlImportText').value));
+  if(!merged.length){ toast('没有可导入的条目'); return; }
+  setWL(merged);
+  closeWlImport();
+  closeWifiSheet();
+  toast('白名单已更新：共 ' + merged.length + ' 个网络');
+}
+function wlImportFile(){
+  if(window.__AUTOX){ nativeSend('import_whitelist_file', {}); }
+  else { toast('浏览器预览无文件导入，请直接粘贴'); }
+}
+
+/* 原生引擎 → UI 事件入口（main.js 通过 evaluateJavascript 调用） */
+window.__onNativeEvent = function(name, data){
+  if(name === 'init_whitelist'){
+    // 原生 config.json 为白名单权威来源，启动时下发（跳过回传避免环路）
+    setWL((data && data.list) || [], true);
+    return;
+  }
+  if(name === 'dicts_data'){
+    renderDicts((data && data.list) || []);
+    return;
+  }
+  if(name === 'dict_entries'){
+    curEntries = (data && data.entries) || [];
+    if(curPage === 'entries') renderEntries(data.name, curEntries);
+    if(curPage === 'dictEdit'){
+      document.getElementById('deName').value = data.name || '';
+      document.getElementById('deDesc').value = (data.desc || '');
+      document.getElementById('deEnabled').checked = data.enabled !== false;
+      document.getElementById('deContent').value = curEntries.join('\n');
+      updateDeStats();
+    }
+    return;
+  }
+  if(name === 'download_txt_list'){
+    const files = (data && data.files) || [];
+    document.getElementById('dlList').innerHTML = files.length
+      ? files.map(function(f){
+          return '<div class="item" onclick="importFromDownload(\'' + escHtml(f) + '\')">' + escHtml(f)
+            + ' <span class="tag">导入</span></div>';
+        }).join('')
+      : '<p class="hint" style="text-align:center;padding:16px 0">Download 目录没有 txt 文件</p>';
+    return;
+  }
+  if(name === 'whitelist_imported'){
+    const t = document.getElementById('wlImportText');
+    t.value = mergeUnique(parseSsidList(t.value), (data && data.list) || []).join('\n');
+    toast((data && data.reason) || '文件导入完成');
+    return;
+  }
+  if(name === 'wifi_scan_result'){
+    // 更新信号快照（白名单表格的信号列由此驱动）
+    WL_SCAN = {};
+    ((data && data.networks) || []).forEach(function(n){
+      WL_SCAN[n.ssid.toLowerCase()] = {level: n.level, security: n.security};
+    });
+    renderWhitelist();
+    renderWifiList((data && data.networks) || []);
+    if(wlSortPending){ wlSortPending = false; doSort(); }
+    return;
+  }
+  if(name === 'progress'){
+    runTried = data.tried;
+    document.getElementById('runCount').textContent = data.tried+'/'+data.total;
+    document.getElementById('runBar').style.width = (data.tried/data.total*100)+'%';
+    if(data.elapsedSec != null) document.getElementById('runTime').textContent = fmt(data.elapsedSec);
+    if(data.speed != null) document.getElementById('runSpeed').textContent = data.speed+'/分';
+    if(data.currentPwd != null) document.getElementById('curPwd').textContent = data.currentPwd;
+    if(data.text) addRunLog(data.text, data.cls||'');
+  } else if(name === 'task_done'){
+    if(window.__nativeTick){ clearInterval(window.__nativeTick); window.__nativeTick = null; }
+    stopRun(!!data.success);
+  }
+};
+
+/* ---------- 开始任务 ---------- */
+function confirmStart(){
+  const targets = collectTargets();
+  const desc = targets.length > 1
+    ? '目标网络：按白名单顺序 ' + targets.length + ' 个（' + targets.slice(0, 3).join(', ')
+      + (targets.length > 3 ? '…' : '') + '）'
+    : '目标网络：' + (targets[0] || '未选择');
+  openModal('确认开始任务', desc + '\n最大尝试：每目标 50 次\n请确认以上网络属于你或已获得书面授权。', '确认并开始', startRun);
+}
+let runTimer = null, runSec = 0, runTried = 0;
+function collectTargets(){
+  const radios = [...document.querySelectorAll('#page-task input[name=target]')];
+  const idx = radios.findIndex(r => r.checked);
+  if(idx === 1){ const v = (document.getElementById('manualSsid')?.value || '').trim(); return v ? [v] : []; }
+  if(idx === 2){ const v = document.getElementById('wlSelect')?.value; return v ? [v] : []; }
+  if(idx === 3){ return getWL(); }
+  return [currentSsid()];
+}
+function startRun(){
+  go('run','运行监控');
+  document.getElementById('homeRun').textContent = '运行中';
+  document.getElementById('homeRun').className = 'tag warn';
+  document.getElementById('runLog').innerHTML = '';
+  runSec = 0; runTried = 0;
+  if(window.__AUTOX){
+    /* 真机：提交给本地引擎（engine.js），合规校验在原生侧强制执行 */
+    const targets = collectTargets();
+    if(!targets.length){ toast('请先选择目标网络'); return; }
+    const runTarget = document.getElementById('runTarget');
+    if(runTarget) runTarget.textContent = targets.length > 1
+      ? targets[0] + ' 等 ' + targets.length + ' 个（按顺序）' : targets[0];
+    addRunLog('任务提交 · 目标 ' + runTarget.textContent + ' · 等待合规校验…');
+    nativeSend('start_task', {
+      ssid: targets[0], targets: targets, maxAttempts: 50, intervalSec: 3,
+      whitelist: getWL(),
+      onHit: (document.getElementById('onHitSelect')?.value === 'continue' ? 'continue' : 'stop'),
+    });
+    if(!window.__nativeTick){
+      window.__nativeTick = setInterval(()=>{
+        runSec++;
+        document.getElementById('runTime').textContent = fmt(runSec);
+      }, 1000);
+    }
+    return;
+  }
+  /* 浏览器模拟路径（用于桌面预览） */
+  const simTargets = collectTargets();
+  const rt = document.getElementById('runTarget');
+  if(rt) rt.textContent = simTargets.length > 1
+    ? simTargets[0] + ' 等 ' + simTargets.length + ' 个（按顺序）' : simTargets[0];
+  addRunLog('任务开始 · 目标 ' + simTargets.join(', '));
+  clearInterval(runTimer);
+  runTimer = setInterval(()=>{
+    runSec++;
+    if(runSec % 2 === 0 && runTried < 50){
+      runTried++;
+      const fail = Math.random() > 0.1;
+      addRunLog('尝试第 '+runTried+' 条 · '+(fail?'失败':'成功'), fail?'fail':'ok');
+      document.getElementById('runCount').textContent = runTried+'/50';
+      document.getElementById('runBar').style.width = (runTried/50*100)+'%';
+      document.getElementById('runSpeed').textContent = (runTried/(runSec/60)).toFixed(1)+'/分';
+      if(!fail){ clearInterval(runTimer); stopRun(true); }
+    }
+    document.getElementById('runTime').textContent = fmt(runSec);
+  }, 1000);
+}
+function fmt(s){ return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function addRunLog(text, cls){
+  const d = document.createElement('div');
+  d.className = 'log-line '+(cls||'');
+  d.innerHTML = '<span>'+fmt(runSec)+'</span><b>'+text+'</b>';
+  const box = document.getElementById('runLog');
+  box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+function stopRun(success){
+  if(window.__AUTOX) nativeSend('stop_task');
+  clearInterval(runTimer);
+  document.getElementById('runStatus').textContent = success?'已成功':'已停止';
+  document.getElementById('runStatus').className = success?'tag ok':'tag danger';
+  document.getElementById('homeRun').textContent = success?'已成功':'已停止';
+  document.getElementById('homeRun').className = success?'tag ok':'tag';
+  addRunLog(success?'任务成功结束':'任务已手动停止', success?'ok':'');
+  if(success) toast('已成功连接');
+}
+let runPaused = false;
+function togglePauseRun(){
+  if(!window.__AUTOX){ toast('浏览器预览'); return; }
+  runPaused = !runPaused;
+  nativeSend(runPaused ? 'pause_task' : 'resume_task');
+  document.getElementById('pauseRunBtn').textContent = runPaused ? '▶ 继续' : '⏸ 暂停';
+  toast(runPaused ? '已暂停' : '已继续');
+}
+function togglePwd(){
+  const el = document.getElementById('curPwd');
+  el.textContent = el.textContent.includes('•') ? 'home2024' : '••••••';
+}
+
+/* ---------- 配置持久化（localStorage） ---------- */
+const CFG_KEY = 'wfp_cfg_v3'; // v3：字典三页重构，元素索引变化
+const NO_PERSIST_IDS = ['wlAddInput', 'wlAddInputSet', 'wlImportText']; // 临时输入框不持久化
+function persistCfg(){
+  const data = {auth: document.getElementById('authCheck').checked, fields: {}};
+  document.querySelectorAll('.page input, .page select, .page textarea').forEach((el, i)=>{
+    if(NO_PERSIST_IDS.indexOf(el.id) >= 0) return;
+    data.fields[i] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
+  });
+  try{ localStorage.setItem(CFG_KEY, JSON.stringify(data)); }catch(e){}
+}
+function restoreCfg(){
+  let data = null;
+  try{ data = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); }catch(e){}
+  if(!data) return;
+  const els = document.querySelectorAll('.page input, .page select, .page textarea');
+  Object.keys(data.fields).forEach(i=>{
+    const el = els[i];
+    if(!el || NO_PERSIST_IDS.indexOf(el.id) >= 0) return;
+    if(el.type === 'checkbox' || el.type === 'radio') el.checked = data.fields[i];
+    else el.value = data.fields[i];
+  });
+  if(data.auth){
+    document.getElementById('homeAuth').textContent = '已确认';
+    document.getElementById('homeAuth').className = 'tag ok';
+  }
+}
+document.addEventListener('change', persistCfg);
+document.addEventListener('input', persistCfg);
+
+/* ---------- 字典管理（真实数据） ---------- */
+let DICTS = [];
+let curDict = null;
+let curEntries = [];
+
+function refreshDicts(){
+  if(window.__AUTOX){ nativeSend('get_dicts'); }
+  else {
+    renderDicts([{name:'demo-test', count:20, enabled:true, desc:'演示字典（浏览器预览）'}]);
+  }
+}
+function renderDicts(list){
+  DICTS = list || [];
+  const totalE = DICTS.reduce(function(a,d){ return a + d.count; }, 0);
+  const en = DICTS.filter(function(d){ return d.enabled; });
+  document.getElementById('dsCount').textContent = DICTS.length + ' 个';
+  document.getElementById('dsEntries').textContent = totalE;
+  document.getElementById('dsEnabled').textContent = en.length + ' 个 / ' + en.reduce(function(a,d){ return a + d.count; }, 0) + ' 条';
+  const box = document.getElementById('dictList');
+  box.innerHTML = DICTS.length ? DICTS.map(function(d){
+    return '<div class="dict-card">'
+      + '<div class="body">'
+      + '<div class="name">' + escHtml(d.name) + ' <span class="tag ' + (d.enabled ? 'ok' : '') + '">' + (d.enabled ? '启用' : '停用') + '</span></div>'
+      + '<div class="meta">' + d.count + ' 条 · ' + escHtml(d.desc || '') + '</div>'
+      + '<div class="ops">'
+      + '<button onclick="openEntries(\'' + escHtml(d.name) + '\')">条目</button>'
+      + '<button onclick="openDictEdit(\'' + escHtml(d.name) + '\')">编辑</button>'
+      + '<button onclick="deleteDict(\'' + escHtml(d.name) + '\')">删除</button>'
+      + '</div></div>'
+      + '<label class="switch"><input type="checkbox" ' + (d.enabled ? 'checked' : '') + ' onchange="setDictEnabled(\'' + escHtml(d.name) + '\', this.checked)"><span></span></label>'
+      + '</div>';
+  }).join('') : '<div class="card"><div class="wl-empty">还没有字典：新建、或从 Download 导入 txt。</div></div>';
+}
+function openDicts(){ go('dict', '字典库'); refreshDicts(); }
+function openNewDict(){ showSheet('newDictSheet'); document.getElementById('ndName').value = ''; }
+function createDict(){
+  const name = document.getElementById('ndName').value.trim();
+  if(!name){ toast('请输入字典名称'); return; }
+  if(!window.__AUTOX){ toast('浏览器预览：仅演示'); closeSheet('newDictSheet'); return; }
+  nativeSend('create_dict', {name: name});
+  closeSheet('newDictSheet');
+  toast('已创建：' + name);
+  setTimeout(refreshDicts, 600);
+}
+function openDictEdit(name){
+  curDict = name;
+  go('dictEdit', '编辑字典');
+  if(window.__AUTOX){ nativeSend('get_dict_entries', {name: name}); }
+  else {
+    document.getElementById('deName').value = name;
+    document.getElementById('deDesc').value = '演示字典（浏览器预览）';
+    document.getElementById('deEnabled').checked = true;
+    document.getElementById('deContent').value = 'demo0001\n' + 'demo0002';
+    updateDeStats();
+  }
+}
+function openEntries(name){
+  curDict = name;
+  go('entries', '条目编辑');
+  if(window.__AUTOX){ nativeSend('get_dict_entries', {name: name}); }
+  else { renderEntries(name, ['demo0001','demo0002','demo0003']); }
+}
+function saveDictEdit(){
+  nativeSend('save_dict', {
+    name: curDict,
+    content: document.getElementById('deContent').value,
+    desc: document.getElementById('deDesc').value.trim(),
+    enabled: document.getElementById('deEnabled').checked,
+  });
+  toast('已保存');
+  setTimeout(refreshDicts, 800);
+}
+function deleteDict(name){
+  openModal('删除字典', '将删除字典「' + name + '」及其文件，不可恢复。', '删除', function(){
+    nativeSend('delete_dict', {name: name});
+    refreshDicts();
+  });
+}
+function setDictEnabled(name, enabled){
+  nativeSend('set_dict_enabled', {name: name, enabled: enabled});
+  toast(enabled ? '已启用' : '已停用');
+}
+function openDlImport(){ showSheet('dlSheet'); if(window.__AUTOX){ nativeSend('list_download_txt'); } }
+function importFromDownload(file){
+  if(window.__AUTOX){ nativeSend('import_from_download', {file: file}); closeSheet('dlSheet'); setTimeout(refreshDicts, 600); }
+}
+function deleteSelectedEntries(){
+  const keep = curEntries.filter(function(e, i){ return !entryChecked[i]; });
+  if(keep.length === curEntries.length){ toast('未勾选任何条目'); return; }
+  openModal('删除选中条目', '将删除勾选的 ' + (curEntries.length - keep.length) + ' 条。', '删除', function(){
+    nativeSend('save_dict', {name: curDict, content: keep.join('\n')});
+    curEntries = keep;
+    renderEntries(curDict, keep);
+  });
+}
+
+/* ---------- 字典事件渲染 ---------- */
+let entryChecked = Object.create(null);
+function renderEntries(name, entries){
+  document.getElementById('enName').textContent = name;
+  document.getElementById('enCount').textContent = entries.length;
+  entryChecked = Object.create(null);
+  const box = document.getElementById('entryList');
+  box.innerHTML = entries.length ? entries.map(function(e, i){
+    return '<div class="entry"><input type="checkbox" onchange="entryChecked[' + i + ']=this.checked">'
+      + '<span class="pwd">' + escHtml(e) + '</span></div>';
+  }).join('') : '<div class="wl-empty">空字典</div>';
+}
+function updateDeStats(){
+  const v = document.getElementById('deContent').value.split(/\r?\n/)
+    .map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+  const seen = Object.create(null); let uniq = 0;
+  v.forEach(function(x){ const k = x.toLowerCase(); if(!seen[k]){ seen[k] = 1; uniq++; } });
+  document.getElementById('deStats').textContent = v.length + ' / ' + uniq;
+}
+document.addEventListener('input', function(e){
+  if(e.target && e.target.id === 'deContent') updateDeStats();
+});
+function showSheet(id){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById(id).classList.add('show');
+}
+function closeSheet(id){
+  document.getElementById(id).classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+/* ---------- 字典生成器（纯前端计算，保存走 save_dict） ---------- */
+let GEN_RESULT = [];
+function genList(v){
+  return (v || '').split(/[,，、]+/).map(function(s){ return s.trim(); }).filter(Boolean);
+}
+function genLeet(w){
+  return w.replace(/o/g, '0').replace(/i/g, '1').replace(/e/g, '3').replace(/a/g, '@');
+}
+function runGenPreview(){
+  const bases = genList(document.getElementById('genBases').value);
+  const vars = genList(document.getElementById('genVars').value);
+  const useCase = document.getElementById('genTCase').checked;
+  const useDigits = document.getElementById('genTDigits').checked;
+  const useLeet = document.getElementById('genTLeet').checked;
+  const min = parseInt(document.getElementById('genMin').value, 10) || 0;
+  const max = parseInt(document.getElementById('genMax').value, 10) || 99;
+  const limit = parseInt(document.getElementById('genLimit').value, 10) || 500;
+  if(!bases.length){ toast('请至少输入一个基础词'); return; }
+  const out = [];
+  const seen = Object.create(null);
+  function push(w){
+    w = String(w);
+    if(w.length < min || w.length > max) return;
+    const k = w.toLowerCase();
+    if(seen[k]) return;
+    seen[k] = 1;
+    if(out.length < limit) out.push(w);
+  }
+  bases.forEach(function(b){
+    const variants = useCase ? [b,
+      b.charAt(0).toUpperCase() + b.slice(1),
+      b.toUpperCase()] : [b];
+    variants.forEach(function(v){
+      push(v);
+      if(useDigits){
+        const seeds = vars.length ? vars : [''];
+        seeds.forEach(function(num){
+          push(v + num);
+          push(v + '_' + num);
+        });
+      }
+      if(useLeet){
+        const leet = genLeet(v);
+        push(leet);
+        if(useDigits){
+          const seeds = vars.length ? vars : [''];
+          seeds.forEach(function(num){ push(leet + num); });
+        }
+      }
+    });
+  });
+  GEN_RESULT = out;
+  document.getElementById('genStats').textContent = out.length + ' / ' + Object.keys(seen).length;
+  const box = document.getElementById('genPreview');
+  box.innerHTML = out.length
+    ? out.slice(0, 50).map(escHtml).join('<br>')
+      + (out.length > 50 ? '<br>…（共 ' + out.length + ' 条，仅预览前 50）' : '')
+    : '（无结果：调整基础词 / 变量值 / 长度范围）';
+}
+function saveGenerated(){
+  if(!(GEN_RESULT && GEN_RESULT.length)){ toast('请先「生成预览」'); return; }
+  const name = document.getElementById('genName').value.trim();
+  if(!name){ toast('请输入新字典名称'); return; }
+  if(!window.__AUTOX){ toast('浏览器预览：仅演示，不落盘'); return; }
+  nativeSend('save_dict', {name: name, content: GEN_RESULT.join('\n'), desc: '生成器生成', enabled: true});
+  toast('已保存为字典：' + name);
+}
+
+/* ---------- 日志页（真实数据） ---------- */
+function logCls(line){
+  if(/命中|TASK_SUCCESS|已成功|成功$/.test(line)) return 'ok';
+  if(/密码错误|密码不正确|超时|未找到|失败|REJECT|手动停止|TASK_END|结束/.test(line)) return 'fail';
+  return '';
+}
+function renderLogBox(id, lines){
+  const box = document.getElementById(id);
+  if(!lines || !lines.length){ box.innerHTML = '<div class="wl-empty">暂无</div>'; return; }
+  box.innerHTML = lines.map(function(l){
+    return '<div class="log-line ' + logCls(l) + '"><b>' + escHtml(l) + '</b></div>';
+  }).join('');
+}
+function renderLogs(data){
+  renderLogBox('logAudit', data && data.audit);
+  renderLogBox('logRuntime', data && data.runtime);
+}
+function refreshLogs(){
+  if(window.__AUTOX){ nativeSend('get_logs'); }
+  else {
+    // 浏览器预览：演示数据
+    renderLogs({
+      audit: ['[2026-11-19 05:00:00] APP_LAUNCH | 浏览器预览', '[2026-11-19 05:00:01] TASK_START | ssid=演示网络 maxAttempts=50'],
+      runtime: ['05:00:02 第 1 条 · 密码错误', '05:00:05 第 2 条 · 命中'],
+    });
+  }
+}
+function exportLogs(){
+  if(window.__AUTOX){ nativeSend('export_logs'); }
+  else { toast('浏览器预览无导出'); }
+}
+function clearRuntimeLog(){
+  openModal('清空运行日志', '将清空 runtime.log（不影响审计日志）。审计日志不可清空。', '清空', function(){
+    if(window.__AUTOX) nativeSend('clear_runtime_log');
+    else { renderLogs({ audit: [], runtime: [] }); toast('已清空'); }
+  });
+}
+
+/* ---------- 初始化 ---------- */
+document.querySelector('.tabbar button').classList.add('on');
+restoreCfg();
+renderWhitelist();
+if(window.__AUTOX) nativeSend('get_whitelist'); // 页面就绪后拉取原生权威白名单
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# 运行时数据（手机端生成，不入库）
+app/data/
+*.log
+
+# 临时文件
+tmp_*.js
+tmp_*.html
+*.png
+__pycache__/
