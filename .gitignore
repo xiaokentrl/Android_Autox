@@ -7,3 +7,4 @@ tmp_*.js
 tmp_*.html
 *.png
 __pycache__/
+uidump.xml
