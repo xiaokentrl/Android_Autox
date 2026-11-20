@@ -13,8 +13,9 @@ const store = require('./store.js');
 
 /** 硬上限（代码级，改 UI 也绕不过） */
 const CAPS = {
-    MAX_ATTEMPTS: 50,
-    MIN_INTERVAL_SEC: 1,
+    MAX_ATTEMPTS: 50,      // 每目标尝试次数上限
+    MIN_INTERVAL_SEC: 1,   // 最小尝试间隔
+    MAX_TARGETS: 20,       // 单任务目标数上限（防止 N×50 无限放大）
 };
 
 /** 默认配置（首次运行时落盘） */
@@ -68,6 +69,10 @@ function checkTask(cfg) {
         ? cfg.targets : (cfg && cfg.ssid ? [cfg.ssid] : []);
     if (!targets.length) {
         return { ok: false, reason: '缺少目标网络' };
+    }
+    if (targets.length > CAPS.MAX_TARGETS) {
+        audit('TASK_REJECT', '目标数 ' + targets.length + ' 超过上限 ' + CAPS.MAX_TARGETS);
+        return { ok: false, reason: '目标数超出上限（≤' + CAPS.MAX_TARGETS + ' 个）' };
     }
     const wl = conf.whitelist.map(s => String(s).trim().toLowerCase());
     for (let i = 0; i < targets.length; i++) {

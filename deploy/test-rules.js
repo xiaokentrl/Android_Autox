@@ -1,8 +1,9 @@
 // 自测：规则链 applyRules 单元测试（从页面脚本提取到 vm 沙箱执行）
 const fs = require('fs');
 const vm = require('vm');
+const path = require('path');
 
-const html = fs.readFileSync('E:/Android_Autox/app/web/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'app', 'web', 'index.html'), 'utf8');
 const m = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!m) { console.error('no script'); process.exit(1); }
 

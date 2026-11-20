@@ -28,24 +28,26 @@ ui.layout(
     </vertical>
 );
 
-/* 单实例保护：已有 main.js 在执行则本次直接退出（防 Intent 重启叠加出僵尸实例） */
+/* 启动清理：强制结束上次残留的 main.js 实例，确保本次是唯一存活实例。
+   旧逻辑是「发现重复就 exit 自己」，会导致 Intent 重拉时新实例退出、旧僵尸继续占屏。 */
 try {
     const storeGuard = require('./lib/store.js');
     const myId = String(engines.myEngine().getId());
-    let dup = false, seen = [];
+    let killedOld = 0, seen = [];
     engines.all().forEach(function (e) {
         const src = String(e.getSource && e.getSource() || '');
         const id = String(e.getId && e.getId() || '');
         seen.push(id + '|' + src.slice(0, 40));
-        if (src.indexOf('main.js') >= 0 && id !== myId) dup = true;
+        // 僵尸实例的 id 可能为空，用实例对象的 forceStop 而非按 id 停止
+        if (src.indexOf('main.js') >= 0 && id !== myId) {
+            try { e.forceStop(); killedOld++; } catch (eStop) {}
+        }
     });
-    storeGuard.appendLine('bridge.log', 'guard: my=' + myId + ' dup=' + dup + ' all=[' + seen.join('; ') + ']');
-    if (dup) {
-        console.log('[main] 已有实例在运行，本次启动退出');
-        exit();
-    }
+    storeGuard.appendLine('bridge.log', 'guard: my=' + myId + ' killedOld=' + killedOld
+        + ' all=[' + seen.join('; ') + ']');
+    if (killedOld) sleep(800); // 等旧实例 WebView 完全释放，避免两个 WebView 叠加
 } catch (eGuard) {
-    console.error('[main] 单实例检查异常: ' + eGuard);
+    console.error('[main] 启动清理异常: ' + eGuard);
 }
 
 const WEB_URL = 'file://' + files.cwd() + '/web/index.html';
@@ -127,6 +129,25 @@ function dictsList() {
     }
     return list;
 }
+function dictMeta() {
+    return store.load('dictmeta.json', {});
+}
+function saveDictMeta(meta) {
+    store.save('dictmeta.json', meta);
+}
+function dictPath(name) {
+    return files.cwd() + '/dicts/' + sanitizeDictName(name) + '.txt';
+}
+function readDictEntries(name) {
+    const p = dictPath(name);
+    if (!files.exists(p)) return [];
+    return files.read(p).replace(/\r\n/g, '\n').split('\n')
+        .map(function (s) { return s.trim(); })
+        .filter(function (s) { return s.length > 0; });
+}
+function writeDictEntries(name, entries) {
+    files.write(dictPath(name), (entries || []).join('\n') + ((entries && entries.length) ? '\n' : ''));
+}
 function nowStr() {
     const d = new Date();
     const p2 = function (n) { return String(n).padStart(2, '0'); };
@@ -138,15 +159,24 @@ function pushHistory() {
 }
 function addHistory(targets) {
     const h = store.load('history.json', []);
-    h.unshift({ time: nowStr(), targets: targets, status: '运行中', hits: [] });
+    const id = String(Date.now()) + '-' + Math.floor(Math.random() * 1000);
+    h.unshift({ id: id, time: nowStr(), targets: targets, status: '运行中', hits: [] });
     store.save('history.json', h.slice(0, 20));
     pushHistory();
+    return id;
 }
-function finishHistory(success, hits, reason) {
+function findRunning(h, id) {
+    // 优先按 id 精确定位；旧记录无 id 时兼容回退到首条运行中
+    let rec = id ? h.find(function (x) { return x.id === id; }) : null;
+    if (!rec) rec = h.find(function (x) { return x.status === '运行中'; });
+    return rec;
+}
+function finishHistory(id, success, hits, reason) {
     const h = store.load('history.json', []);
-    if (h.length && h[0].status === '运行中') {
-        h[0].status = success ? '命中' : (reason || '未命中');
-        h[0].hits = hits || [];
+    const rec = findRunning(h, id);
+    if (rec) {
+        rec.status = success ? '命中' : (reason || '未命中');
+        rec.hits = hits || [];
         store.save('history.json', h.slice(0, 20));
         pushHistory();
     }
@@ -159,7 +189,16 @@ function handleCommand(cmd, payload) {
             compliance.audit('WHITELIST_UPDATE', payload.whitelist.join(', '));
         }
         compliance.recordAuthConfirmation();
-        addHistory((payload.targets && payload.targets.length) ? payload.targets : [payload.ssid]);
+        // 已有任务在跑时不新建历史（否则会被 engine 拒绝后留下一条永久「运行中」的错位记录）
+        if (engine.isRunning()) {
+            toast('已有任务在运行，请等待结束或先停止');
+            pushEvent('task_state', { state: 'rejected', reason: '已有任务在运行' });
+            return;
+        }
+        const taskId = addHistory((payload.targets && payload.targets.length) ? payload.targets : [payload.ssid]);
+        // 屏幕常亮仅在任务期间生效（偏好由设置页携带）
+        const wantKeepAwake = !!(payload && payload.keepAwake);
+        if (wantKeepAwake) { try { device.keepScreenOn(0); } catch (e) {} }
         // 悬浮窗面板：任务运行期间唯一的暂停/停止入口（屏幕会被 WLAN 设置页占用）
         const pvTargets = (payload && payload.targets && payload.targets.length)
             ? payload.targets : [payload && payload.ssid];
@@ -183,21 +222,30 @@ function handleCommand(cmd, payload) {
                     if (p.tried != null && p.total != null) {
                         panel.update((p.target || (payload && payload.ssid) || '') + ' · ' + p.tried + '/' + p.total);
                     }
+                    if (p.currentPwd != null) panel.setPwd(p.currentPwd);
                     pushEvent('progress', p);
-                },                onHit: function (ssid) {
+                },
+                onHit: function (ssid, pwd) {
                     const h = store.load('history.json', []);
-                    if (h.length && h[0].status === '运行中' && h[0].hits.indexOf(ssid) < 0) h[0].hits.push(ssid);
+                    const rec = findRunning(h, taskId);
+                    if (rec && rec.hits.indexOf(ssid) < 0) rec.hits.push(ssid);
                     store.save('history.json', h.slice(0, 20));
+                    panel.setPwd('✓ ' + (pwd || '')); // 命中：悬浮窗显示命中密码
+                    pushEvent('task_hit', { ssid: ssid, password: pwd || '' });
                 },
                 onDone: function (success, reason) {
+                    if (wantKeepAwake) { try { device.cancelKeepingAwake(); } catch (e) {} }
                     panel.close();
-                    finishHistory(success, store.load('history.json', [])[0] ? store.load('history.json', [])[0].hits : [], reason);
+                    const h = store.load('history.json', []);
+                    const rec = findRunning(h, taskId);
+                    finishHistory(taskId, success, (rec && rec.hits) || [], reason);
                     toast('任务' + (success ? '成功' : '结束') + (reason ? '：' + reason : ''));
                     pushEvent('task_done', { success: success, reason: reason });
                 },
             });
         });
     } else if (cmd === 'stop_task') {
+        if (engine.isRunning()) pushEvent('task_state', { state: 'stopping' });
         engine.stop();
     } else if (cmd === 'scan_wifi') {
         // 扫描含 sleep 等待，放独立线程避免冻结 UI
@@ -233,37 +281,6 @@ function handleCommand(cmd, payload) {
             }
             pushEvent('whitelist_imported', { list: list, reason: reason });
         });
-    } else if (cmd === 'get_logs') {
-        threads.start(function () {
-            function tail(name, n) {
-                const p = files.cwd() + '/data/' + name;
-                if (!files.exists(p)) return [];
-                const lines = files.read(p).split(/\r?\n/)
-                    .map(function (s) { return s.trim(); })
-                    .filter(function (s) { return s.length > 0; });
-                return lines.slice(-n).reverse(); // 最新在前
-            }
-            pushEvent('logs_data', { audit: tail('audit.log', 80), runtime: tail('runtime.log', 80) });
-        });
-    } else if (cmd === 'clear_runtime_log') {
-        threads.start(function () {
-            files.write(files.cwd() + '/data/runtime.log', '');
-            compliance.audit('RUNTIME_LOG_CLEAR', '用户清空运行日志');
-            pushEvent('logs_data', { audit: [], runtime: [] });
-        });
-    } else if (cmd === 'export_logs') {
-        threads.start(function () {
-            const dir = files.cwd() + '/data/';
-            let out = '';
-            ['runtime.log', 'audit.log'].forEach(function (name) {
-                if (files.exists(dir + name)) {
-                    out += '===== ' + name + ' =====\n' + files.read(dir + name) + '\n\n';
-                }
-            });
-            const dest = '/sdcard/Download/wifipoller-logs-' + Date.now() + '.txt';
-            files.write(dest, out);
-            toast('已导出到：' + dest);
-        });
     } else if (cmd === 'get_history') {
         pushHistory();
     } else if (cmd === 'get_wifi_status') {
@@ -283,6 +300,7 @@ function handleCommand(cmd, payload) {
         });
     } else if (cmd === 'skip_task') {
         engine.skip();
+        pushEvent('task_state', { state: 'skipping' });
     } else if (cmd === 'get_perms') {
         threads.start(function () {
             let acc = false, overlay = false, batt = false;
@@ -307,12 +325,84 @@ function handleCommand(cmd, payload) {
         });
     } else if (cmd === 'open_batt_opt') {
         app.startActivity({ action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS' });
+    } else if (cmd === 'get_device_status') {
+        threads.start(function () {
+            let battery = -1, temp = -1, charging = false, wifiOn = false;
+            try {
+                importClass(android.content.Intent);
+                const bm = context.registerReceiver(null,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+                if (bm) {
+                    const level = bm.getIntExtra('level', -1);
+                    const scale = bm.getIntExtra('scale', 100);
+                    battery = scale > 0 ? Math.round(level * 100 / scale) : -1;
+                    temp = bm.getIntExtra('temperature', -1) / 10; // 十分之一摄氏度
+                    charging = bm.getIntExtra('plugged', 0) > 0;
+                }
+            } catch (e) {}
+            try {
+                const wm = context.getSystemService(context.WIFI_SERVICE);
+                wifiOn = !!(wm && wm.isWifiEnabled());
+            } catch (e) {}
+            pushEvent('device_status', { battery: battery, temp: temp, charging: charging, wifiOn: wifiOn });
+        });
+    } else if (cmd === 'set_keep_awake') {
+        try {
+            if (payload && payload.on) { device.keepScreenOn(0); toast('屏幕常亮已开启'); }
+            else { device.cancelKeepingAwake(); toast('屏幕常亮已关闭'); }
+        } catch (e) { toast('设置屏幕常亮失败：' + e); }
+    } else if (cmd === 'open_wifi_settings') {
+        try { app.startActivity({ action: android.provider.Settings.ACTION_WIFI_SETTINGS }); }
+        catch (e) { toast('无法打开 Wi-Fi 设置'); }
+    } else if (cmd === 'backup_data') {
+        threads.start(function () {
+            try {
+                const dir = files.cwd() + '/data/';
+                const dump = { version: 1, time: nowStr(), config: null, dictmeta: null, dicts: {} };
+                if (files.exists(dir + 'config.json')) dump.config = JSON.parse(files.read(dir + 'config.json'));
+                if (files.exists(dir + 'dictmeta.json')) dump.dictmeta = JSON.parse(files.read(dir + 'dictmeta.json'));
+                const dd = files.cwd() + '/dicts/';
+                if (files.exists(dd)) {
+                    const list = files.listDir(dd);
+                    list.forEach(function (name) {
+                        if (name.toLowerCase().endsWith('.txt')) dump.dicts[name] = files.read(dd + name);
+                    });
+                }
+                const dest = '/sdcard/Download/wifipoller-backup-' + Date.now() + '.json';
+                files.write(dest, JSON.stringify(dump, null, 2));
+                pushEvent('backup_result', { ok: true, path: dest, reason: '已导出 ' + Object.keys(dump.dicts).length + ' 个字典' });
+            } catch (e) {
+                pushEvent('backup_result', { ok: false, reason: String(e) });
+            }
+        });
+    } else if (cmd === 'restore_data') {
+        threads.start(function () {
+            try {
+                const path = (payload && payload.path) ? String(payload.path).trim() : '';
+                if (!path || !files.exists(path)) { pushEvent('restore_result', { ok: false, reason: '文件不存在' }); return; }
+                const dump = JSON.parse(files.read(path));
+                if (!dump || dump.version !== 1) { pushEvent('restore_result', { ok: false, reason: '备份格式不兼容' }); return; }
+                const dir = files.cwd() + '/data/';
+                if (dump.config) files.write(dir + 'config.json', JSON.stringify(dump.config, null, 2));
+                if (dump.dictmeta) files.write(dir + 'dictmeta.json', JSON.stringify(dump.dictmeta, null, 2));
+                const dd = files.cwd() + '/dicts/';
+                Object.keys(dump.dicts || {}).forEach(function (name) { files.write(dd + name, dump.dicts[name]); });
+                pushEvent('restore_result', { ok: true, reason: '已恢复 ' + Object.keys(dump.dicts || {}).length + ' 个字典，请重启脚本生效' });
+            } catch (e) {
+                pushEvent('restore_result', { ok: false, reason: String(e) });
+            }
+        });
+    } else if (cmd === 'reset_panel_pos') {
+        panel.resetPos();
+        toast('悬浮窗位置已重置');
     } else if (cmd === 'pause_task') {
         engine.pause();
         panel.setPaused(true);
+        pushEvent('task_state', { state: 'paused' });
     } else if (cmd === 'resume_task') {
         engine.resume();
         panel.setPaused(false);
+        pushEvent('task_state', { state: 'running' });
     } else if (cmd === 'get_whitelist') {
         // 页面就绪后主动拉取（避免 init 推送与页面加载竞态）
         pushEvent('init_whitelist', { list: compliance.config().whitelist });
@@ -320,6 +410,106 @@ function handleCommand(cmd, payload) {
         if (payload && Array.isArray(payload.list)) {
             compliance.saveConfig({ whitelist: payload.list });
             compliance.audit('WHITELIST_UPDATE', payload.list.join(', '));
+        }
+    } else if (cmd === 'get_dicts') {
+        pushEvent('dicts_data', { list: dictsList() });
+    } else if (cmd === 'get_dict_entries') {
+        var geName = sanitizeDictName(payload && payload.name);
+        var geMeta = dictMeta()[geName] || {};
+        pushEvent('dict_entries', {
+            name: geName,
+            entries: readDictEntries(geName),
+            desc: geMeta.desc || '',
+            enabled: geMeta.enabled !== false,
+            rules: geMeta.rules || {}
+        });
+    } else if (cmd === 'create_dict') {
+        var crName = sanitizeDictName(payload && payload.name);
+        if (crName) {
+            var crMeta = dictMeta();
+            if (!files.exists(dictPath(crName))) writeDictEntries(crName, []);
+            if (!crMeta[crName]) crMeta[crName] = { enabled: true, desc: '', rules: {} };
+            saveDictMeta(crMeta);
+            compliance.audit('DICT_CREATE', 'name=' + crName);
+        }
+        pushEvent('dicts_data', { list: dictsList() });
+    } else if (cmd === 'save_dict') {
+        var svName = sanitizeDictName(payload && payload.name);
+        if (svName) {
+            var svEntries = Array.isArray(payload.content)
+                ? payload.content
+                : String(payload.content || '').split(/\r?\n/)
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+            writeDictEntries(svName, svEntries);
+            var svMeta = dictMeta();
+            var svItem = svMeta[svName] || {};
+            if (payload.desc != null) svItem.desc = String(payload.desc);
+            if (payload.enabled != null) svItem.enabled = !!payload.enabled;
+            if (payload.rules) svItem.rules = payload.rules;
+            svMeta[svName] = svItem;
+            saveDictMeta(svMeta);
+            compliance.audit('DICT_SAVE', 'name=' + svName + ' entries=' + svEntries.length);
+        }
+        pushEvent('dicts_data', { list: dictsList() });
+    } else if (cmd === 'delete_dict') {
+        var dlName = sanitizeDictName(payload && payload.name);
+        if (dlName) {
+            try { files.remove(dictPath(dlName)); } catch (e) {}
+            var dlMeta = dictMeta();
+            delete dlMeta[dlName];
+            saveDictMeta(dlMeta);
+            compliance.audit('DICT_DELETE', 'name=' + dlName);
+        }
+        pushEvent('dicts_data', { list: dictsList() });
+    } else if (cmd === 'set_dict_enabled') {
+        var enName = sanitizeDictName(payload && payload.name);
+        if (enName) {
+            var enMeta = dictMeta();
+            var enItem = enMeta[enName] || {};
+            enItem.enabled = !!(payload && payload.enabled);
+            enMeta[enName] = enItem;
+            saveDictMeta(enMeta);
+            compliance.audit('DICT_TOGGLE', 'name=' + enName + ' enabled=' + enItem.enabled);
+        }
+        pushEvent('dicts_data', { list: dictsList() });
+    } else if (cmd === 'list_download_txt') {
+        var ldDir = (payload && payload.path) ? String(payload.path) : '/sdcard/Download/';
+        if (!ldDir.endsWith('/')) ldDir += '/';
+        var ldList = [];
+        if (files.exists(ldDir)) {
+            try {
+                files.listDir(ldDir, function (n) { return n.toLowerCase().endsWith('.txt'); })
+                    .forEach(function (n) { ldList.push(ldDir + n); }); // 返回完整路径
+            } catch (e) { bridgeLog('列目录失败: ' + ldDir + ' ' + e); }
+        }
+        var ldShortcuts = ['/sdcard/Download/', files.cwd() + '/dicts/', '/sdcard/Documents/'];
+        pushEvent('download_txt_list', { files: ldList, path: ldDir, shortcuts: ldShortcuts });
+    } else if (cmd === 'exit_app') {
+        // 首页左上角返回：网页无法自行结束进程，交原生在 UI 线程退出
+        bridgeLog('exit_app: 网页请求退出应用');
+        try { ui.run(function () { ui.finish(); }); } catch (eExit) { ui.finish(); }
+    } else if (cmd === 'import_from_download') {
+        var imPath = (payload && payload.path) ? String(payload.path) : '';
+        if (imPath && imPath.toLowerCase().endsWith('.txt')) {
+            if (files.exists(imPath)) {
+                var imBase = imPath.split('/').pop();
+                var imDictName = sanitizeDictName(imBase.replace(/\.txt$/i, ''));
+                var imEntries = files.read(imPath).split(/\r?\n/)
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+                writeDictEntries(imDictName, imEntries);
+                var imMeta = dictMeta();
+                if (!imMeta[imDictName]) imMeta[imDictName] = { enabled: true, desc: '', rules: {} };
+                saveDictMeta(imMeta);
+                compliance.audit('DICT_IMPORT', 'name=' + imDictName + ' path=' + imPath + ' entries=' + imEntries.length);
+                toast('已导入：' + imDictName + '（' + imEntries.length + ' 条）');
+                pushEvent('dicts_data', { list: dictsList() });
+            } else {
+                toast('文件不存在：' + imPath);
+            }
+        } else {
+            toast('请选择 txt 文件');
         }
     }
 }
@@ -422,7 +612,47 @@ if (files.exists(files.cwd() + '/data/selftest.flag')) {
 }
 bridgeLog('main.js 启动完成');
 
+/* 启动时无障碍引导：未开启则自动跳到「已下载应用」里的 AutoX.js 无障碍开关
+ * Android 不允许第三方代码直接打开无障碍开关，只能跳转设置页由用户点一次。
+ * 已开启则静默跳过。仅引导一次，避免循环跳转。 */
+setTimeout(function () {
+    try {
+        // 可靠检测：读系统安全设置里的无障碍组件列表，确认含 AutoX 组件
+        var accOn = false;
+        try {
+            importClass(android.provider.Settings);
+            var comp = 'org.autojs.autoxjs.v7/com.stardust.autojs.core.accessibility.AccessibilityService';
+            var enabled = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) || '';
+            var enabledInt = Settings.Secure.getInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 0);
+            accOn = (enabledInt === 1) && enabled.toLowerCase().indexOf(comp.toLowerCase()) >= 0;
+        } catch (eCheck) {
+            accOn = !!(auto && auto.service); // 退回 auto.service 判断
+        }
+        bridgeLog('无障碍检测: ' + (accOn ? '已开启' : '未开启'));
+        if (accOn) return;
+        toast('请先开启 AutoX.js 无障碍服务（已跳转设置页）');
+        var comp = 'org.autojs.autoxjs.v7/com.stardust.autojs.core.accessibility.AccessibilityService';
+        try {
+            app.startActivity({
+                action: 'android.settings.ACCESSIBILITY_SETTINGS',
+                extras: {
+                    ':settings:fragment_args_key': comp,
+                    ':settings:show_fragment_args': { ':settings:fragment_args_key': comp }
+                }
+            });
+            bridgeLog('已跳转无障碍设置页（定位 ' + comp + '）');
+        } catch (eJump) {
+            // 带 extra 跳转失败则退回普通无障碍设置页
+            app.startActivity({ action: 'android.settings.ACCESSIBILITY_SETTINGS' });
+            bridgeLog('跳转普通无障碍设置页: ' + eJump);
+        }
+    } catch (e) {
+        bridgeLog('无障碍引导异常: ' + e);
+    }
+}, 1500);
+
 /* 白名单权威来源在原生 config.json，启动后下发到 UI */
 setTimeout(function () {
     pushEvent('init_whitelist', { list: compliance.config().whitelist });
 }, 1200);
+

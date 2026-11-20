@@ -1,8 +1,9 @@
 // 自测：多目标引擎状态机（vm 沙箱，桩掉 connect/compliance/dict/定时器/存储）
 const fs = require('fs');
 const vm = require('vm');
+const path = require('path');
 
-const engineSrc = fs.readFileSync('E:/Android_Autox/app/lib/engine.js', 'utf8');
+const engineSrc = fs.readFileSync(path.join(__dirname, '..', 'app', 'lib', 'engine.js'), 'utf8');
 
 function chainStub() {
     const o = {};
@@ -19,7 +20,7 @@ function makeSandbox(opts) {
     const timeouts = [];
     const connectCalls = [];
     const sandbox = {
-        auto: { root: {} },
+        auto: { root: {}, service: {} },
         sleep() {},
         toast() {},
         app: { startActivity() {} },
@@ -55,9 +56,15 @@ function makeSandbox(opts) {
             },
             './dict.js': { candidates(n) { return opts.candidates.slice(0, n); } },
             './connect.js': {
-                attemptConnect(ssid, pwd) {
+                attemptConnect(ssid, pwd, cfg) {
                     const r = opts.results.shift() || 'wrong_password';
-                    connectCalls.push({ ssid: ssid, pwd: pwd, result: r });
+                    connectCalls.push({
+                        ssid: ssid, pwd: pwd, result: r,
+                        hasStopCheck: !!(cfg && typeof cfg.stopCheck === 'function'),
+                        hasPauseCheck: !!(cfg && typeof cfg.pauseCheck === 'function'),
+                        hasSkipCheck: !!(cfg && typeof cfg.skipCheck === 'function'),
+                        stopNow: !!(cfg && cfg.stopCheck && cfg.stopCheck()),
+                    });
                     return r;
                 },
             },
@@ -214,6 +221,29 @@ t('目标切换：进度按新目标归零', function () {
     assert(aaaProgress.some(p => p.tried === 1), 'AAA 有 tried=1');
     assert(bbbProgress.some(p => p.tried === 1), 'BBB 重新从 tried=1 计数');
     assert(!progress.some(p => p.tried === 2), '没有跨目标累计的 tried=2');
+});
+
+/* 9 控制回调下沉：connect 能拿到 stop/pause/skip 检查，且 stop 后回调返回 true */
+t('控制回调下沉：connect 收到 stopCheck/pauseCheck/skipCheck', function () {
+    const env = makeSandbox({
+        whitelist: ['AAA'], candidates: ['p1', 'p2'],
+        results: ['wrong_password', 'wrong_password'],
+    });
+    const done = [];
+    env.E.start({ ssid: 'AAA', maxAttempts: 50, intervalSec: 2 }, {
+        onLog() {}, onProgress() {}, onDone(ok, reason) { done.push([ok, reason]); },
+    });
+    env.pump(1); // 只跑到第 1 次 attemptConnect
+    assert(env.connectCalls.length >= 1, '至少一次连接尝试');
+    const c0 = env.connectCalls[0];
+    assert(c0.hasStopCheck && c0.hasPauseCheck && c0.hasSkipCheck, '三个控制回调都传给 connect');
+    assert(c0.stopNow === false, '初始 stopCheck 为 false');
+    // 停止后任务应立即结束，不再发起新的连接尝试
+    const callsBeforeStop = env.connectCalls.length;
+    env.E.stop();
+    env.pump();
+    assert(env.connectCalls.length === callsBeforeStop, 'stop 后不再有新的连接尝试');
+    assert(done.length === 1 && done[0][1] === '手动停止', 'stop 后任务以手动停止结束');
 });
 
 console.log('\n结果: ' + pass + ' 通过 / ' + fail + ' 失败');

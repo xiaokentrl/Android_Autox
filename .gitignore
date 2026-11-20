@@ -8,3 +8,6 @@ tmp_*.html
 *.png
 __pycache__/
 uidump.xml
+
+# CodeBuddy 本地计划（另一 AI 工具的工作文件）
+.codebuddy/

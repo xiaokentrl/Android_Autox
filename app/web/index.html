@@ -8,6 +8,12 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#f2f3f5;--card:#fff;--text:#1a1a1a;--muted:#8a8f99;--primary:#2f6bff;--border:#e6e8eb;--danger:#e5484d;--ok:#18a058;--warn:#f5a623;--chip:#eef2ff}
 body.dark{--bg:#0f1115;--card:#1a1d23;--text:#e8eaed;--muted:#8a8f99;--border:#2a2f37;--primary:#5b8cff;--chip:#1e2637;--bg2:#14171c}
+/* 外观配置：字体大小 / 卡片密度（由设置页 applyAppearance 切换） */
+/* 用 zoom 整体缩放，确保固定 px 字号也跟着变大（Android WebView 支持） */
+body.fs-large .app,body.fs-xlarge .app{zoom:1.12}
+body.fs-xlarge .app{zoom:1.24}
+body.compact .card{padding:8px}body.compact .row{padding:6px 0}body.compact .wl-row{padding:6px 8px}
+body.loose .card{padding:16px}body.loose .row{padding:12px 0}
 /* 全屏化改造：去掉桌面预览用的手机壳外框，铺满 WebView */
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
 .app{width:100%;height:100vh;background:var(--bg);overflow:hidden;position:relative;display:flex;flex-direction:column}
@@ -135,6 +141,15 @@ details.card>summary+*{margin-top:10px}
 .wl-addrow{display:flex;gap:6px;margin-bottom:8px}
 .wl-addrow input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;outline:none}
 .wl-addrow button{border:none;background:var(--chip);color:var(--primary);border-radius:9px;padding:0 14px;font-size:13px;cursor:pointer}
+/* 通用列表组件 UIList */
+.list-tools{display:flex;align-items:center;gap:6px;margin:6px 0}
+.list-search{flex:1;min-width:0;padding:7px 10px!important;border:1px solid var(--border)!important;border-radius:8px!important;background:var(--bg)!important;color:var(--text)!important;font-size:12px!important}
+.list-sel{width:16px;height:16px;accent-color:var(--primary);flex:0 0 auto;margin-right:2px}
+.list-bulk{display:flex;gap:6px;align-items:center;padding:6px 0;margin-bottom:4px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+.list-bulk button{border:none;background:rgba(229,72,77,.12);color:var(--danger);border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer}
+.list-sortbar{display:flex;gap:5px;flex-wrap:wrap}
+.list-sortbar button{border:none;background:var(--chip);color:var(--primary);border-radius:7px;padding:4px 8px;font-size:11px;cursor:pointer}
+.list-sortbar button.on{background:var(--primary);color:#fff}
 .preview-box{background:var(--bg);border-radius:10px;padding:10px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.9;color:var(--muted);max-height:150px;overflow-y:auto}
 .perm{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
 .perm:last-child{border:none}
@@ -165,11 +180,12 @@ details.card>summary+*{margin-top:10px}
         </div>
         <div class="card">
           <h3>目标网络白名单 <span class="wl-count">0</span> 个（导入即声明自有或已获授权）</h3>
-          <input type="hidden" id="authWhitelist" value="MyHome_5G, Office_Test">
+          <input type="hidden" id="authWhitelist" value="">
           <div class="wl-addrow">
             <input id="wlAddInput" placeholder="输入 SSID 添加">
             <button onclick="wlAdd()">添加</button>
           </div>
+          <input type="text" class="list-search" id="wlSearchAuth" placeholder="搜索白名单 SSID…" style="width:100%;margin-bottom:6px">
           <div class="wl-table" id="wlTableAuth"><div class="wl-scroll" id="wlScrollAuth"></div></div>
           <button class="wl-more" id="wlMoreAuth" style="display:none"></button>
           <div class="btns">
@@ -187,7 +203,7 @@ details.card>summary+*{margin-top:10px}
           <label class="switch"><input type="checkbox" id="authCheck"><span></span></label>
         </div>
         <button class="btn btn-primary" onclick="doAuth()">进入应用</button>
-        <p class="hint">授权记录将被写入审计日志，可在“设置 › 合规与安全”中查看。</p>
+        <p class="hint">授权记录将被写入审计日志（强制记录，不可修改）。</p>
       </div>
     </section>
 
@@ -196,90 +212,83 @@ details.card>summary+*{margin-top:10px}
       <div class="card">
         <div class="row"><span>合规模式</span><span class="tag ok">已开启 🔒</span></div>
         <div class="row"><span>授权状态</span><span id="homeAuth" class="tag warn">未确认</span></div>
-        <div class="row"><span>当前网络</span><b id="homeCurNet">MyHome_5G</b></div>
+        <div class="row"><span>当前网络</span><b id="homeCurNet">--</b></div>
         <div class="row"><span>运行状态</span><span id="homeRun" class="tag">未运行</span></div>
       </div>
       <div class="btns">
         <button class="btn btn-ghost" onclick="openSheet()">选择目标网络</button>
         <button class="btn btn-primary" onclick="go('task','新建轮询任务')">选择字典并开始</button>
       </div>
-      <div class="sec-title">最近任务</div>
-      <div class="card" style="padding:0"><div id="historyList" style="max-height:240px;overflow-y:auto"><div class="wl-empty">暂无任务记录</div></div></div>
-      <div class="sec-title">快捷操作</div>
-      <div class="btns">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="go('dict','字典库')">导入字典</button>
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="go('task','新建轮询任务')">新建任务</button>
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="go('log','运行日志')">查看日志</button>
+      <div class="sec-title">目标网络白名单 <span class="wl-count">0</span> 个</div>
+      <div class="card" style="padding:0">
+        <input type="text" class="list-search" id="wlSearchHome" placeholder="搜索白名单 SSID…" style="width:100%;margin:6px 8px;width:calc(100% - 16px)">
+        <div class="wl-table" id="wlTableHome"><div class="wl-scroll" id="wlScrollHome"></div></div>
+        <button class="wl-more" id="wlMoreHome" style="display:none"></button>
+        <div class="btns" style="padding:10px">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openWifiPicker()">📡 扫描选择</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openWhitelistImport()">📋 批量导入</button>
+        </div>
+        <div class="btns" style="padding:0 10px 10px">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlRefreshSignal()">🔄 刷新信号</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlSortBySignal()">⇅ 按信号排序</button>
+        </div>
       </div>
+      <div class="sec-title">快捷操作</div>
+      <div class="btns" id="homeQuickBtns"></div>
     </section>
 
     <!-- ========== 任务配置 ========== -->
     <section class="page" id="page-task">
       <details class="card" open>
         <summary>目标网络</summary>
-        <div class="radio"><input type="radio" name="target" id="targetCur" checked> 当前 Wi-Fi：MyHome_5G</div>
+        <div class="radio"><input type="radio" name="target" id="targetCur" checked> 当前 Wi-Fi：<span id="taskCurNet">--</span></div>
         <div class="radio"><input type="radio" name="target" id="targetManual"> 手动输入 SSID</div>
         <input type="text" id="manualSsid" placeholder="输入 SSID" style="margin:4px 0 8px 26px;width:calc(100% - 26px)">
         <div class="radio"><input type="radio" name="target" id="targetWl"> 从白名单选择</div>
-        <select id="wlSelect" style="margin-left:26px;width:calc(100% - 26px)"><option>Office_Test</option><option>Lab_Guest</option></select>
+        <select id="wlSelect" style="margin-left:26px;width:calc(100% - 26px)"></select>
         <div class="radio"><input type="radio" name="target" id="targetAll"> 白名单全部（按顺序，<span id="tAllCount">0</span> 个 · 信号优先）</div>
-        <div class="field" style="margin-top:8px"><label>安全类型</label>
-          <select><option>自动识别</option><option>WPA2</option><option>WPA3</option><option>WEP</option><option>开放</option></select>
-        </div>
       </details>
 
       <details class="card" open>
-        <summary>字典与轮询策略</summary>
-        <div class="rule"><span class="name">1. 常用弱口令库 <span class="tag">320 条</span></span>
-          <label class="switch"><input type="checkbox" checked><span></span></label>
-          <div class="ord"><button onclick="moveRule(this,-1)">▲</button><button onclick="moveRule(this,1)">▼</button></div>
+        <summary>字典（勾选参与本次任务）</summary>
+        <div class="list-tools">
+          <input type="text" class="list-search" id="taskDictSearch" placeholder="搜索字典…">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);white-space:nowrap">
+            <input type="checkbox" class="list-sel" id="taskDictSelectAll"> 全选
+          </label>
         </div>
-        <div class="rule"><span class="name">2. 家庭生日规则 <span class="tag">150 条</span></span>
-          <label class="switch"><input type="checkbox" checked><span></span></label>
-          <div class="ord"><button onclick="moveRule(this,-1)">▲</button><button onclick="moveRule(this,1)">▼</button></div>
-        </div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="go('dict','字典库')">+ 添加字典</button>
-        <div class="grid2" style="margin-top:10px">
-          <div class="field"><label>轮询方式</label><select><option>顺序</option><option>随机</option><option>权重</option></select></div>
-          <div class="field"><label>命中后</label><select id="onHitSelect"><option value="stop">停止</option><option value="continue">继续并记录</option></select></div>
-          <div class="field"><label>循环轮数</label><input type="number" value="1"></div>
-          <div class="field"><label>最大尝试数</label><input type="number" value="50"></div>
-          <div class="field"><label>每次间隔 (s)</label><input type="number" value="3"></div>
-          <div class="field"><label>失败冷却 (s)</label><input type="number" value="5"></div>
-        </div>
+        <div id="taskDictList"><p class="hint">加载中…</p></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="go('dict','字典库')">+ 管理字典</button>
       </details>
 
-      <details class="card">
-        <summary>连接与判定</summary>
+      <details class="card" open>
+        <summary>轮询策略</summary>
         <div class="grid2">
-          <div class="field"><label>连接超时 (s)</label><input type="number" value="15"></div>
-          <div class="field"><label>元素等待 (s)</label><input type="number" value="8"></div>
-          <div class="field"><label>失败重试</label><input type="number" value="1"></div>
+          <div class="field"><label>命中后</label><select id="onHitSelect"><option value="stop">停止</option><option value="continue">继续并记录</option></select></div>
+          <div class="field"><label>每目标最大尝试</label><input type="number" id="taskMaxAttempts" value="50" min="1" max="50"></div>
+          <div class="field"><label>每次间隔 (s)</label><input type="number" id="taskInterval" value="3" min="1"></div>
+          <div class="field"><label>连接超时 (s)</label><input type="number" id="taskTimeout" value="20" min="5"></div>
         </div>
-        <div class="row"><span>验证互联网连通</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>失败后忘记网络</span><label class="switch"><input type="checkbox"><span></span></label></div>
-      </details>
-
-      <details class="card">
-        <summary>运行环境</summary>
-        <div class="row"><span>前台服务</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>悬浮窗</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>屏幕常亮</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>锁屏继续</span><label class="switch"><input type="checkbox"><span></span></label></div>
-        <div class="row"><span>低电量暂停</span><input type="number" value="20" style="width:80px;text-align:right"></div>
-        <div class="row"><span>温度过高暂停</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>失败后忘记网络</span><label class="switch"><input type="checkbox" id="taskForget"><span></span></label></div>
+        <p class="hint" style="margin-top:8px">上限：每目标 50 次、最多 20 个目标、总尝试 ≤1000 次；间隔 ≥1s。</p>
       </details>
 
       <div class="btns">
-        <button class="btn btn-ghost" onclick="toast('已保存为模板')">保存为模板</button>
         <button class="btn btn-primary" onclick="confirmStart()">开始任务</button>
       </div>
     </section>
 
+    <!-- 任务页：查看字典内容弹层 -->
+    <div class="sheet" id="taskDictViewSheet">
+      <h4><span id="tdvName">字典内容</span> <span onclick="closeSheet('taskDictViewSheet')" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
+      <div id="tdvCount" class="hint" style="margin-bottom:8px"></div>
+      <div id="tdvContent" style="font-family:monospace;font-size:12px;line-height:1.6;max-height:55vh;overflow:auto"></div>
+    </div>
+
     <!-- ========== 运行监控 ========== -->
     <section class="page" id="page-run">
       <div class="card">
-        <div class="row"><span>目标网络</span><b id="runTarget">MyHome_5G</b></div>
+        <div class="row"><span>目标网络</span><b id="runTarget">--</b></div>
         <div class="row"><span>状态</span><span id="runStatus" class="tag warn">运行中</span></div>
         <div class="progress"><i id="runBar" style="width:0%"></i></div>
         <div class="stat-grid">
@@ -288,6 +297,8 @@ details.card>summary+*{margin-top:10px}
           <div><b id="runTime">00:00</b><small>用时</small></div>
         </div>
         <div class="row"><span>当前密码</span><span class="mask-pwd" id="curPwd" onclick="togglePwd()">••••••</span></div>
+        <div class="row" id="hitRow" style="display:none"><span>命中结果</span><b id="hitResult" class="tag ok">—</b></div>
+        <div class="hint" id="runPhase" style="margin:6px 0;font-size:12px">等待任务启动…</div>
         <div class="btns">
           <button class="btn btn-ghost btn-sm" style="flex:1" id="pauseRunBtn" onclick="togglePauseRun()">⏸ 暂停</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="skipTask()">⏭ 跳过</button>
@@ -308,10 +319,22 @@ details.card>summary+*{margin-top:10px}
         <div class="btns">
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openNewDict()">➕ 新建</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openDlImport()">📥 从 Download 导入</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="refreshDicts()">🔄 刷新</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="refreshDicts(true)">🔄 刷新</button>
         </div>
         <p class="hint">字典 = dicts/ 目录下的 txt 文件（一行一条）；启用的字典才参与轮询候选。</p>
+        <div class="list-tools">
+          <input type="text" class="list-search" id="dictSearch" placeholder="搜索字典名 / 描述…">
+          <div class="list-sortbar" id="dictSortBar"></div>
+        </div>
+        <div class="list-bulk" id="dictBulk" style="display:none">
+          <span data-role="label">已选 0 项</span>
+          <button data-act="clear">取消选择</button>
+          <button data-act="delete">批量删除</button>
+        </div>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:4px 2px">
+        <input type="checkbox" class="list-sel" id="dictSelectAll"> 全选当前列表
+      </label>
       <div id="dictList"></div>
 
       <div class="sheet" id="newDictSheet">
@@ -320,7 +343,13 @@ details.card>summary+*{margin-top:10px}
         <div class="btns"><button class="btn btn-primary" onclick="createDict()">创建</button></div>
       </div>
       <div class="sheet" id="dlSheet">
-        <h4>从 Download 导入 txt <span onclick="closeSheet('dlSheet')" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
+        <h4>从文件导入 txt <span onclick="closeSheet('dlSheet')" style="color:var(--muted);font-weight:400;cursor:pointer">关闭</span></h4>
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <input type="text" id="dlPath" placeholder="输入目录完整路径，如 /sdcard/Download/" style="flex:1">
+          <button class="btn btn-primary btn-sm" onclick="browseDlPath()">浏览</button>
+        </div>
+        <div id="dlShortcuts" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <p class="hint" id="dlCurPath" style="margin:2px 0 6px"></p>
         <div id="dlList"><p class="hint" style="text-align:center;padding:16px 0">加载中…</p></div>
       </div>
     </section>
@@ -331,7 +360,7 @@ details.card>summary+*{margin-top:10px}
       <div class="card">
         <div class="field"><label>字典名称</label><input type="text" id="deName" readonly style="opacity:.7"></div>
         <div class="field"><label>描述</label><input type="text" id="deDesc" placeholder="用途备注"></div>
-        <div class="row"><span>启用（参与轮询候选）</span><label class="switch"><input type="checkbox" id="deEnabled"><span></span></label></div>
+        <div class="row"><span>启用（参与轮询候选）</span><label class="switch"><input type="checkbox" id="deEnabled" onchange="setDictEnabled(curDict, this.checked)"><span></span></label></div>
         <div class="kv"><span>条数 / 去重后</span><span id="deStats">0 / 0</span></div>
       </div>
       <div class="card">
@@ -377,7 +406,21 @@ details.card>summary+*{margin-top:10px}
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openDicts()">↩ 返回列表</button>
         </div>
       </div>
-      <div class="card" style="padding:0"><div id="entryList" style="max-height:440px;overflow-y:auto"></div></div>
+      <div class="card">
+        <div class="list-tools">
+          <input type="text" class="list-search" id="entrySearch" placeholder="搜索条目…">
+          <div class="list-sortbar" id="entrySortBar"></div>
+        </div>
+        <div class="list-bulk" id="entryBulk" style="display:none">
+          <span data-role="label">已选 0 条</span>
+          <button data-act="clear">取消选择</button>
+          <button data-act="delete">删除选中</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:4px">
+          <input type="checkbox" class="list-sel" id="entrySelectAll"> 全选当前列表
+        </label>
+      </div>
+      <div class="card" style="padding:0"><div id="entryList"></div></div>
     </section>
 
     <!-- ========== 生成器 ========== -->
@@ -408,65 +451,21 @@ details.card>summary+*{margin-top:10px}
       </div>
     </section>
 
-    <!-- ========== 日志 ========== -->
-    <section class="page" id="page-log">
-      <div class="card">
-        <div class="btns">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="refreshLogs()">🔄 刷新</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="exportLogs()">📤 导出到 Download</button>
-          <button class="btn btn-danger btn-sm" style="flex:1" onclick="clearRuntimeLog()">🧹 清空运行日志</button>
-        </div>
-        <p class="hint">运行日志记录每次尝试（可清空）；审计日志由合规层强制记录（授权/任务起止/白名单变更/命中），不可修改。</p>
-      </div>
-      <div class="sec-title">运行日志 · runtime.log</div>
-      <div class="card" style="padding:0"><div id="logRuntime" style="max-height:240px;overflow-y:auto;overflow-x:auto"><div class="wl-empty">暂无</div></div></div>
-      <div class="sec-title">审计日志 · audit.log（强制记录）</div>
-      <div class="card" style="padding:0"><div id="logAudit" style="max-height:240px;overflow-y:auto;overflow-x:auto"><div class="wl-empty">暂无</div></div></div>
-    </section>
-
     <!-- ========== 设置 ========== -->
     <section class="page" id="page-set">
       <details class="card">
-        <summary>1 · 默认任务策略</summary>
-        <div class="grid2">
-          <div class="field"><label>默认轮询方式</label><select><option>顺序</option><option>随机</option><option>权重</option></select></div>
-          <div class="field"><label>命中后</label><select><option>停止</option><option>继续记录</option></select></div>
-          <div class="field"><label>循环轮数</label><input type="number" value="1"></div>
-          <div class="field"><label>最大尝试数</label><input type="number" value="50"></div>
-          <div class="field"><label>每次间隔 (s)</label><input type="number" value="3"></div>
-          <div class="field"><label>失败冷却 (s)</label><input type="number" value="5"></div>
-          <div class="field"><label>连接超时 (s)</label><input type="number" value="15"></div>
-          <div class="field"><label>元素等待 (s)</label><input type="number" value="8"></div>
-        </div>
-        <div class="row"><span>验证互联网连通</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>失败后忘记网络</span><label class="switch"><input type="checkbox"><span></span></label></div>
+        <summary>1 · 运行与权限</summary>
+        <div class="row"><span>前台服务（防杀/保活）</span><button class="btn btn-ghost btn-sm" onclick="openBattOpt()">去设置</button></div>
+        <div class="row"><span>悬浮窗权限</span><button class="btn btn-ghost btn-sm" onclick="openOverlaySettings()">去设置</button></div>
+        <div class="row"><span>悬浮窗位置</span><button class="btn btn-ghost btn-sm" onclick="resetPanelPos()">重置位置</button></div>
+        <div class="row"><span>屏幕常亮（仅任务期间）</span><label class="switch"><input type="checkbox" id="setKeepAwake" onchange="persistCfg()"><span></span></label></div>
+        <div class="row"><span>设备状态</span><span class="tag" id="devStatus">检测中…</span></div>
+        <div class="row"><span>Wi-Fi 状态</span><span class="tag" id="devWifi">检测中…</span><button class="btn btn-ghost btn-sm" onclick="nativeSend('open_wifi_settings')">去设置</button></div>
+        <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="nativeSend('get_device_status')">🔄 刷新设备状态</button>
       </details>
 
       <details class="card">
-        <summary>2 · 字典默认规则</summary>
-        <div class="row"><span>默认去重方式</span><select style="width:130px"><option>完全重复</option><option>忽略大小写</option></select></div>
-        <div class="row"><span>默认排序</span><select style="width:130px"><option>原始顺序</option><option>长度升序</option><option>随机</option></select></div>
-        <div class="row"><span>默认编码</span><select style="width:130px"><option>UTF-8</option><option>GBK</option></select></div>
-        <div class="row"><span>默认遮罩显示</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>默认加密存储</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>自动备份字典</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="field"><label>默认导入目录</label><input type="text" value="/Download/dicts"></div>
-      </details>
-
-      <details class="card">
-        <summary>3 · 运行与通知</summary>
-        <div class="row"><span>前台服务通知</span><select style="width:130px"><option>标准</option><option>简洁</option><option>静默</option></select></div>
-        <div class="row"><span>悬浮窗</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>悬浮窗位置</span><select style="width:130px"><option>右上</option><option>右下</option><option>左侧</option></select></div>
-        <div class="row"><span>锁屏继续</span><label class="switch"><input type="checkbox"><span></span></label></div>
-        <div class="row"><span>屏幕常亮</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>低电量阈值</span><input type="number" value="20" style="width:70px;text-align:right"></div>
-        <div class="row"><span>温度保护</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>Wi-Fi 开关策略</span><select style="width:130px"><option>保持开启</option><option>自动重开</option></select></div>
-      </details>
-
-      <details class="card">
-        <summary>4 · 权限向导</summary>
+        <summary>2 · 权限向导</summary>
         <div class="perm"><span>无障碍服务</span><span class="tag" id="permAcc">检测中</span><button class="btn btn-ghost btn-sm" onclick="openAccSettings()">去设置</button></div>
         <div class="perm"><span>悬浮窗权限</span><span class="tag" id="permOverlay">检测中</span><button class="btn btn-ghost btn-sm" onclick="openOverlaySettings()">去设置</button></div>
         <div class="perm"><span>电池优化白名单</span><span class="tag" id="permBatt">检测中</span><button class="btn btn-ghost btn-sm" onclick="openBattOpt()">去设置</button></div>
@@ -474,44 +473,42 @@ details.card>summary+*{margin-top:10px}
       </details>
 
       <details class="card">
-        <summary>5 · 外观与交互</summary>
+        <summary>3 · 外观与交互</summary>
         <div class="row"><span>主题</span>
-          <select style="width:130px" onchange="setTheme(this.value)">
+          <select id="setTheme" style="width:130px" onchange="applyAppearance()">
             <option value="light">浅色</option><option value="dark">深色</option><option value="system">跟随系统</option>
           </select>
         </div>
-        <div class="row"><span>主色</span><input type="color" value="#2f6bff" style="width:40px;height:28px;border:none;background:none"></div>
-        <div class="row"><span>字体大小</span><select style="width:130px"><option>标准</option><option>大</option><option>特大</option></select></div>
-        <div class="row"><span>卡片密度</span><select style="width:130px"><option>标准</option><option>紧凑</option><option>宽松</option></select></div>
-        <div class="row"><span>语言</span><select style="width:130px"><option>简体中文</option><option>English</option></select></div>
-        <div class="field"><label>底部 Tab 顺序（逗号分隔）</label><input type="text" value="首页, 任务, 字典, 日志, 设置"></div>
-        <div class="field"><label>首页快捷按钮</label><input type="text" value="导入字典, 新建任务, 日志"></div>
-        <div class="field"><label>日志默认字段</label><input type="text" value="时间, 结果, 耗时, 序号"></div>
-        <div class="row"><span>密码默认遮罩时长</span><select style="width:130px"><option>始终遮罩</option><option>点击显示 5s</option><option>点击显示 10s</option></select></div>
+        <div class="row"><span>主色</span><input type="color" id="setPrimary" value="#2f6bff" style="width:40px;height:28px;border:none;background:none" onchange="applyAppearance()"></div>
+        <div class="row"><span>字体大小</span><select id="setFontSize" style="width:130px" onchange="applyAppearance()"><option value="normal">标准</option><option value="large">大</option><option value="xlarge">特大</option></select></div>
+        <div class="row"><span>卡片密度</span><select id="setDensity" style="width:130px" onchange="applyAppearance()"><option value="normal">标准</option><option value="compact">紧凑</option><option value="loose">宽松</option></select></div>
+        <div class="field"><label>底部 Tab 顺序（逗号分隔）</label><input type="text" id="setTabOrder" value="首页,任务,字典,设置" onchange="applyTabOrder();persistCfg()"><p class="hint">可选：首页 / 任务 / 字典 / 设置。留空则全部显示。</p></div>
+        <div class="field"><label>首页快捷按钮（逗号分隔）</label><input type="text" id="setQuickBtns" value="字典,任务,白名单" onchange="applyQuickButtons();persistCfg()"><p class="hint">可选：字典 / 任务 / 白名单 / 扫描。</p></div>
+        <div class="row"><span>密码点击显示时长</span><select id="setPwdMaskSec" style="width:130px" onchange="persistCfg()"><option value="0">始终遮罩</option><option value="5">显示 5 秒</option><option value="10">显示 10 秒</option><option value="-1">点击切换</option></select></div>
       </details>
 
       <details class="card">
-        <summary>6 · 数据与备份</summary>
+        <summary>4 · 数据与备份</summary>
+        <p class="hint">备份包含配置、字典元数据与全部字典内容，导出为单个 JSON 文件到 Download。</p>
         <div class="btns">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('配置已导出 JSON')">导出配置</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('请选择配置文件')">导入配置</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="backupData()">📤 导出备份</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('restorePath').style.display=document.getElementById('restorePath').style.display==='none'?'block':'none'">📥 导入备份</button>
         </div>
-        <div class="btns">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('字典已备份')">备份字典</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('请选择备份文件')">恢复字典</button>
+        <div id="restorePath" style="display:none;margin-top:8px">
+          <div class="field"><label>备份文件路径</label><input type="text" id="restoreFilePath" placeholder="/sdcard/Download/wifipoller-backup-....json"></div>
+          <button class="btn btn-primary btn-sm" style="width:100%" onclick="restoreData()">确认恢复</button>
         </div>
-        <div class="row"><span>自动备份周期</span><select style="width:130px"><option>每天</option><option>每 3 天</option><option>每周</option><option>关闭</option></select></div>
-        <div class="row"><span>清空日志</span><button class="btn btn-danger btn-sm" onclick="toast('已清空日志')">清空</button></div>
-        <div class="row"><span>清空字典</span><button class="btn btn-danger btn-sm" onclick="toast('需二次确认')">清空</button></div>
+        <p class="hint" id="backupResult">备份文件也位于 /sdcard/脚本/WiFi字典轮询器/dicts（字典原文）</p>
       </details>
 
       <details class="card">
-        <summary>7 · 合规与安全</summary>
+        <summary>5 · 合规与安全</summary>
         <div class="row"><span>授权确认记录</span><span class="tag ok">已记录</span></div>
         <div class="wl-addrow">
           <input id="wlAddInputSet" placeholder="输入 SSID 添加">
           <button onclick="wlAddSet()">添加</button>
         </div>
+        <input type="text" class="list-search" id="wlSearchSet" placeholder="搜索白名单 SSID…" style="width:100%;margin-bottom:6px">
         <div class="wl-table"><div class="wl-scroll" id="wlScrollSet"></div></div>
         <button class="wl-more" id="wlMoreSet" style="display:none"></button>
         <div class="btns">
@@ -523,24 +520,27 @@ details.card>summary+*{margin-top:10px}
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="wlSortBySignal()">⇅ 按信号排序</button>
         </div>
         <p class="hint wl-sorthint">点 ⇅ 按信号排序：信号强的排最前（每行左侧标签标明 强/良/中/弱）。</p>
-        <div class="row"><span>最大尝试次数硬上限</span><input type="number" value="50" style="width:70px;text-align:right"></div>
-        <div class="row"><span>最小尝试间隔下限 (s)</span><input type="number" value="1" style="width:70px;text-align:right"></div>
-        <div class="row"><span>审计日志</span><label class="switch"><input type="checkbox" checked disabled><span></span></label></div>
-        <div class="row"><span>任务前二次确认</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
-        <div class="row"><span>禁止导出敏感字段</span><label class="switch"><input type="checkbox" checked><span></span></label></div>
+        <div class="row"><span>最大尝试次数硬上限</span><span class="tag">50 次（代码级固定）</span></div>
+        <div class="row"><span>最小尝试间隔下限</span><span class="tag">1 秒（代码级固定）</span></div>
+        <div class="row"><span>审计日志</span><span class="tag ok">强制开启</span></div>
+        <div class="row"><span>任务前二次确认</span><label class="switch"><input type="checkbox" id="setTaskConfirm" checked onchange="persistCfg()"><span></span></label></div>
+        <div class="row"><span>禁止导出敏感字段</span><span class="tag ok">强制开启</span></div>
       </details>
 
       <details class="card">
-        <summary>8 · 高级</summary>
-        <div class="field"><label>脚本钩子：任务开始</label><textarea placeholder="// 在此编写用户脚本"></textarea></div>
-        <div class="field"><label>脚本钩子：每次尝试</label><textarea placeholder="// 在此编写用户脚本"></textarea></div>
-        <div class="field"><label>脚本钩子：成功 / 失败</label><textarea placeholder="// 在此编写用户脚本"></textarea></div>
-        <div class="btns">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('变量与模板管理')">变量与模板</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toast('配置模板管理')">配置模板</button>
-        </div>
-        <div class="row"><span>调试模式</span><label class="switch"><input type="checkbox"><span></span></label></div>
-        <div class="row"><span>日志级别</span><select style="width:130px"><option>普通</option><option>详细</option><option>调试</option></select></div>
+        <summary>6 · 脚本钩子（高级）</summary>
+        <p class="hint">在每个任务节点执行自定义 JS。开始：targets、total；尝试：target、pwd、tried；结束：success、reason、hits。通用 log('文本') 写运行日志。出错只记日志，不影响任务。</p>
+        <div class="field"><label>任务开始时（onStart）</label><textarea id="hookStart" placeholder="log('任务开始：' + targets.length + ' 个目标');" style="min-height:50px"></textarea></div>
+        <div class="field"><label>每次尝试前（onAttempt）</label><textarea id="hookAttempt" placeholder="// if (tried % 10 === 0) log('已尝试 ' + tried + ' 条');" style="min-height:50px"></textarea></div>
+        <div class="field"><label>任务结束时（onFinish）</label><textarea id="hookFinish" placeholder="log('结束：' + (success ? '命中' : reason));" style="min-height:50px"></textarea></div>
+        <button class="btn btn-ghost btn-sm" style="width:100%" onclick="persistCfg();toast('脚本钩子已保存')">保存钩子</button>
+      </details>
+
+      <details class="card">
+        <summary>7 · 关于</summary>
+        <div class="kv"><span>应用</span><span>Wi-Fi 字典轮询器</span></div>
+        <div class="kv"><span>版本</span><span>AutoX.js v7 脚本版</span></div>
+        <div class="kv"><span>用途</span><span>自有/已授权网络的密码找回与强度自测</span></div>
       </details>
     </section>
 
@@ -550,7 +550,6 @@ details.card>summary+*{margin-top:10px}
     <button data-tab="home" class="on" onclick="go('home','Wi-Fi 字典轮询器')"><span class="ico">🏠</span>首页</button>
     <button data-tab="task" onclick="go('task','新建轮询任务')"><span class="ico">📋</span>任务</button>
     <button data-tab="dict" onclick="go('dict','字典库')"><span class="ico">📚</span>字典</button>
-    <button data-tab="log" onclick="go('log','运行日志')"><span class="ico">📜</span>日志</button>
     <button data-tab="set" onclick="go('set','设置')"><span class="ico">⚙️</span>设置</button>
   </nav>
 
@@ -574,6 +573,7 @@ details.card>summary+*{margin-top:10px}
     <div class="row"><span><b>全选</b>（当前共 <span id="wifiCount">0</span> 个）</span>
       <label class="switch"><input type="checkbox" id="wifiAll" onchange="toggleAllWifi(this.checked)"><span></span></label>
     </div>
+    <p class="hint" style="margin-top:0">来源：<span class="tag ok">当前连接</span><span class="tag warn">已保存</span><span class="tag">附近扫描</span>；白名单列标出已加入的网络（已加入的无需再勾选）。</p>
     <div id="wifiList" style="max-height:300px;overflow-y:auto"></div>
     <div class="btns">
       <button class="btn btn-ghost" onclick="rescanWifi()">🔄 重新扫描</button>
@@ -596,13 +596,204 @@ details.card>summary+*{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-/* ---------- 路由 ---------- */
-const PAGE_TAB = {home:'home',task:'task',run:'task',dict:'dict',dictEdit:'dict',entries:'dict',gen:'dict',log:'log',set:'set',auth:''};
-let curPage = 'auth';
-const backStack = []; // 多级返回栈：字典 → 编辑 → 条目 逐层返回
+/* ---------- 公共列表组件 UIList ----------
+ * 统一能力：搜索过滤 / 排序 / 展开收起 / 勾选全选 / 批量操作 / 上下移 / 删除 / 空态 / 数量 / 滚动高度。
+ * 差异化交给回调：key(item) 唯一键、row(item,i,filtered) 行 HTML、text(item) 供搜索、on* 事件。
+ * 用法：var L = UIList.mount({box:'dictList', data:list, key:d=>d.name, row:(d,i)=>..., ...});
+ *       L.setData(newList) 更新数据；组件自动保留勾选/搜索/排序/展开状态。
+ */
+const UIList = (function(){
+  function el(id){ return document.getElementById(id); }
+  function State(cfg){
+    this.cfg = cfg;
+    this.query = '';
+    this.sortKey = cfg.sort && cfg.sort.defaultKey ? cfg.sort.defaultKey : '';
+    this.expanded = false;
+    this.checked = Object.create(null);
+  }
+  State.prototype.visible = function(){
+    const c = this.cfg;
+    let data = (c.data || []).slice();
+    // 搜索过滤
+    if(this.query){
+      const q = this.query.toLowerCase();
+      data = data.filter(function(x){ return String(c.text ? c.text(x) : x).toLowerCase().indexOf(q) >= 0; });
+    }
+    // 排序
+    if(this.sortKey && c.sort && c.sort.fns && c.sort.fns[this.sortKey]){
+      data = c.sort.fns[this.sortKey](data);
+    } else if(c.order && c.order.getOrder){
+      // 外部维护顺序时保持原样
+    }
+    return data;
+  };
+  State.prototype.toggleCheck = function(key, on){
+    if(on) this.checked[key] = true; else delete this.checked[key];
+    this.render();
+    if(this.cfg.onSelectChange) this.cfg.onSelectChange(this.checkedKeys());
+  };
+  State.prototype.checkedKeys = function(){ return Object.keys(this.checked); };
+  State.prototype.clearChecks = function(){ this.checked = Object.create(null); this.render(); };
+  State.prototype.render = function(){
+    const c = this.cfg, self = this;
+    const box = el(c.box);
+    if(!box) return;
+    const all = c.data || [];
+    const data = this.visible();
+    // 数量
+    (c.count || []).forEach(function(id){ const e = el(id); if(e) e.textContent = data.length; });
+    // 搜索框（可选外部容器）
+    if(c.searchBox){
+      const sb = el(c.searchBox);
+      if(sb){
+        if(!sb._uilBound){
+          sb.addEventListener('input', function(){ self.query = this.value.trim(); self.render(); });
+          sb._uilBound = true;
+        }
+        sb.value = this.query;
+      }
+    }
+    // 排序栏（可选外部容器）
+    if(c.sortBar && c.sort && c.sort.fns){
+      const bar = el(c.sortBar);
+      if(bar){
+        bar.innerHTML = Object.keys(c.sort.fns).map(function(k){
+          return '<button data-sort="' + escHtml(k) + '" class="' + (self.sortKey === k ? 'on' : '') + '">'
+            + escHtml(c.sort.labels ? c.sort.labels[k] : k) + '</button>';
+        }).join('');
+        if(!bar._uilBound){
+          bar.addEventListener('click', function(e){
+            const b = e.target.closest('button[data-sort]');
+            if(!b) return;
+            self.sortKey = (self.sortKey === b.dataset.sort) ? '' : b.dataset.sort;
+            self.render();
+          });
+          bar._uilBound = true;
+        }
+      }
+    }
+    // 全选 / 批量栏
+    const keys = data.map(function(x){ return String(c.key ? c.key(x) : x); });
+    if(c.selectAllBox){
+      const sa = el(c.selectAllBox);
+      if(sa){
+        sa.checked = keys.length > 0 && keys.every(function(k){ return !!self.checked[k]; });
+        if(!sa._uilBound){ sa.addEventListener('change', function(){
+          keys.forEach(function(k){ if(self.checked[k]) delete self.checked[k]; else self.checked[k] = true; });
+          self.render();
+          if(c.onSelectChange) c.onSelectChange(self.checkedKeys());
+        }); sa._uilBound = true; }
+      }
+    }
+    if(c.bulkBar){
+      const bb = el(c.bulkBar);
+      if(bb){
+        const n = this.checkedKeys().length;
+        bb.style.display = n ? 'flex' : 'none';
+        const label = bb.querySelector('[data-role=label]');
+        if(label) label.textContent = '已选 ' + n + ' 项';
+        if(!bb._uilBound){
+          bb.addEventListener('click', function(e){
+            const b = e.target.closest('button[data-act]');
+            if(!b) return;
+            if(b.dataset.act === 'clear'){ self.clearChecks(); }
+            else if(b.dataset.act === 'delete' && c.onBatchDelete){ c.onBatchDelete(self.checkedKeys()); self.clearChecks(); }
+          });
+          bb._uilBound = true;
+        }
+      }
+    }
+    // 空态
+    if(!data.length){
+      box.innerHTML = '<div class="wl-empty">' + escHtml(this.query ? '没有匹配的结果' : (c.empty || '暂无数据')) + '</div>';
+      return;
+    }
+    // 截断 + 展开
+    const at = c.expandAt || 0;
+    let shown = data, more = null;
+    if(at > 0 && data.length > at && !this.expanded){
+      shown = data.slice(0, at);
+      more = '<button class="wl-more" data-act="expand">展开更多（共 ' + data.length + ' 条）▾</button>';
+    } else if(at > 0 && this.expanded && data.length > at){
+      more = '<button class="wl-more" data-act="collapse">收起 ▴</button>';
+    }
+    box.innerHTML = shown.map(function(x, i){
+      const key = String(c.key ? c.key(x) : x);
+      const checked = !!self.checked[key] ? 'checked' : '';
+      const ck = c.selectable
+        ? '<input type="checkbox" class="list-sel" data-key="' + escHtml(key) + '" ' + checked + '>'
+        : '';
+      const ord = c.orderable
+        ? '<span class="ord"><button data-act="up" data-key="' + escHtml(key) + '">▲</button><button data-act="down" data-key="' + escHtml(key) + '">▼</button></span>'
+        : '';
+      const del = c.deletable
+        ? '<button class="del" data-act="del" data-key="' + escHtml(key) + '">✕</button>'
+        : '';
+      return (c.row ? c.row(x, i, self) : '<div>' + escHtml(String(x)) + '</div>')
+        .replace('{{CK}}', ck).replace('{{ORD}}', ord).replace('{{DEL}}', del);
+    }).join('') + (more || '');
+    // 滚动高度
+    if(c.maxHeight){
+      box.style.maxHeight = c.maxHeight;
+      box.style.overflowY = 'auto';
+      box.style.scrollbarWidth = 'thin';
+    }
+    // 事件委托
+    if(!box._uilBound){
+      box.addEventListener('click', function(e){
+        const t = e.target;
+        if(t.matches('.wl-more')){
+          self.expanded = (t.dataset.act === 'expand'); self.render(); return;
+        }
+        const actBtn = t.closest('[data-act]');
+        if(actBtn){
+          const act = actBtn.dataset.act, key = actBtn.dataset.key;
+          if(act === 'del' && c.onDelete){ c.onDelete(key); return; }
+          if(act === 'up' && c.onMove){ c.onMove(key, -1); return; }
+          if(act === 'down' && c.onMove){ c.onMove(key, 1); return; }
+        }
+        if(c.onItemClick){
+          const row = t.closest('[data-uil-row]');
+          if(row && !t.matches('input,button')) c.onItemClick(row.dataset.key, row.dataset.idx);
+        }
+      });
+      box.addEventListener('change', function(e){
+        const ck = e.target.closest('.list-sel');
+        if(ck){ self.toggleCheck(ck.dataset.key, ck.checked); }
+      });
+      box._uilBound = true;
+    }
+  };
+  const api = {
+    mount: function(cfg){
+      const s = new State(cfg);
+      s.render();
+      return {
+        setData: function(data){ cfg.data = data || []; s.render(); },
+        render: function(){ s.render(); },
+        clearChecks: function(){ s.clearChecks(); },
+        checkedKeys: function(){ return s.checkedKeys(); },
+        state: s,
+        cfg: cfg
+      };
+    }
+  };
+  return api;
+})();
 
-function go(id, title, fromBack){
-  if(!fromBack && curPage !== id) backStack.push(curPage);
+/* ---------- 路由 ---------- */
+const PAGE_TAB = {home:'home',task:'task',run:'task',dict:'dict',dictEdit:'dict',entries:'dict',gen:'dict',set:'set',auth:''};
+// 固定层级：每个页面的上级菜单，左上角返回一律回这里；首页/授权页无上级 → 退出应用
+const PARENT_PAGE = {
+  auth:'__exit__', home:'__exit__',
+  task:'home', run:'task',
+  dict:'home', dictEdit:'dict', entries:'dict', gen:'dict',
+  set:'home'
+};
+let curPage = 'auth';
+
+function go(id, title){
+  if(curPage !== id) closeAll(); // 切页时关闭所有弹层，避免叠加遮挡
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el = document.getElementById('page-'+id);
   if(el) el.classList.add('active');
@@ -613,29 +804,36 @@ function go(id, title, fromBack){
     b.classList.toggle('on', b.dataset.tab === PAGE_TAB[id]);
   });
   document.getElementById('main').scrollTop = 0;
-  // 进入日志页自动拉取最新日志
-  if(id==='log' && window.__AUTOX) nativeSend('get_logs');
   if(id==='dict') refreshDicts();
-  if(id==='set' && window.__AUTOX) nativeSend('get_perms');
-  if(id==='set' && window.__AUTOX) nativeSend('get_perms');
+  if(id==='task') initTaskPage();
+  if(id==='set' && window.__AUTOX){ nativeSend('get_perms'); nativeSend('get_device_status'); }
   if(id==='home') refreshHistory();
 }
 function goBack(){
   __webBack();
 }
-/* 统一返回入口：弹层开着先关弹层，否则回上一页；栈空返回 false（供原生决定是否退出） */
+/* 统一返回入口：弹层开着先关弹层 → 否则回固定上级菜单；
+   首页/授权页无上级 → 弹确认框，确认后才退出应用 */
 window.__webBack = function(){
   const ov = document.getElementById('overlay');
   if(ov.classList.contains('show')){ closeAll(); return true; }
-  if(backStack.length){
-    const prev = backStack.pop();
-    go(prev, titleOf(prev), true);
-    return true;
+  const parent = PARENT_PAGE[curPage];
+  if(!parent || parent === '__exit__'){
+    confirmExitApp();
+    return true; // 已消费（弹框接管），不让原生直接 finish
   }
-  return false;
+  go(parent, titleOf(parent));
+  return true;
+}
+function confirmExitApp(){
+  // 避免重复弹框
+  if(document.getElementById('overlay').classList.contains('show')) return;
+  openModal('退出应用', '确定要退出「Wi-Fi 字典轮询器」吗？', '退出', function(){
+    if(window.__AUTOX) nativeSend('exit_app');
+  });
 }
 function titleOf(id){
-  return {home:'Wi-Fi 字典轮询器',task:'新建轮询任务',run:'运行监控',dict:'字典库',dictEdit:'编辑字典',entries:'条目编辑',gen:'字典生成器',log:'运行日志',set:'设置'}[id]||'';
+  return {home:'Wi-Fi 字典轮询器',task:'新建轮询任务',run:'运行监控',dict:'字典库',dictEdit:'编辑字典',entries:'条目编辑',gen:'字典生成器',set:'设置'}[id]||'';
 }
 function headerAction(){}
 
@@ -665,6 +863,7 @@ function closeAll(){
   document.getElementById('newDictSheet').classList.remove('show');
   document.getElementById('dlSheet').classList.remove('show');
   document.getElementById('wlImportSheet').classList.remove('show');
+  var tdv = document.getElementById('taskDictViewSheet'); if(tdv) tdv.classList.remove('show');
 }
 function openModal(title, body, okText, onOk){
   document.getElementById('modalTitle').textContent = title;
@@ -675,9 +874,14 @@ function openModal(title, body, okText, onOk){
   document.getElementById('overlay').classList.add('show');
   document.getElementById('modal').classList.add('show');
 }
-function openSheet(){
-  document.getElementById('overlay').classList.add('show');
-  document.getElementById('sheet').classList.add('show');
+function wlSortedBySignal(){
+  const list = getWL();
+  const known = list.filter(function(s){ return WL_SCAN[s.toLowerCase()] != null; });
+  const unknown = list.filter(function(s){ return WL_SCAN[s.toLowerCase()] == null; });
+  known.sort(function(a, b){
+    return WL_SCAN[b.toLowerCase()].level - WL_SCAN[a.toLowerCase()].level;
+  });
+  return known.concat(unknown);
 }
 let currentTarget = '';
 function pickNet(name){
@@ -690,16 +894,24 @@ function pickNet(name){
 }
 function openSheet(){
   renderSheetList();
+  if(window.__AUTOX && !Object.keys(WL_SCAN).length) nativeSend('scan_wifi');
   document.getElementById('overlay').classList.add('show');
   document.getElementById('sheet').classList.add('show');
 }
 function renderSheetList(){
-  const wl = getWL();
+  const wl = wlSortedBySignal();
   const box = document.getElementById('sheetList');
-  box.innerHTML = wl.length ? wl.map(function(name){
+  if(!wl.length){
+    box.innerHTML = '<div class="wl-empty">白名单为空：请先在下方添加或扫描选择。</div>';
+    return;
+  }
+  box.innerHTML = wl.map(function(name){
+    const info = WL_SCAN[name.toLowerCase()];
+    const sig = info ? sigHtml(name) : '<span class="sig"><span class="grade gu">未扫描</span></span>';
     return '<div class="item" onclick="pickNet(\'' + escHtml(name) + '\')">' + escHtml(name)
+      + sig
       + ' <span class="tag ok">白名单</span></div>';
-  }).join('') : '<div class="wl-empty">白名单为空：请先在下方添加或扫描选择。</div>';
+  }).join('');
 }
 
 /* ---------- 规则上下移动 ---------- */
@@ -713,20 +925,83 @@ function moveRule(btn, dir){
   }
 }
 
-/* ---------- 字典批量 ---------- */
-function toggleBulk(){
-  const any = [...document.querySelectorAll('#page-dict .dict-card input[type=checkbox]')].some(c=>c.checked);
-  document.getElementById('bulkbar').classList.toggle('show', any);
-}
-
 /* ---------- 主题 ---------- */
 function setTheme(v){
   if(v==='dark') document.body.classList.add('dark');
   else if(v==='light') document.body.classList.remove('dark');
   else {
-    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    let dark = false;
+    try { dark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (e) {}
     document.body.classList.toggle('dark', dark);
   }
+}
+/* 外观设置即时生效：主题 + 主色 + 字体大小 + 卡片密度，并持久化到 localStorage */
+function applyAppearance(){
+  const theme = document.getElementById('setTheme')?.value || 'system';
+  setTheme(theme);
+  const primary = document.getElementById('setPrimary')?.value || '#2f6bff';
+  // 设到 body（body.dark 也在此定义 --primary，行内样式优先级最高，深浅色都生效）
+  document.body.style.setProperty('--primary', primary);
+  const fs = document.getElementById('setFontSize')?.value || 'normal';
+  document.body.classList.remove('fs-large','fs-xlarge');
+  if(fs === 'large') document.body.classList.add('fs-large');
+  if(fs === 'xlarge') document.body.classList.add('fs-xlarge');
+  const density = document.getElementById('setDensity')?.value || 'normal';
+  document.body.classList.remove('compact','loose');
+  if(density === 'compact') document.body.classList.add('compact');
+  if(density === 'loose') document.body.classList.add('loose');
+  try {
+    // 读取完整配置对象后只更新 appearance，避免覆盖 auth/whitelist 等其他字段
+    let d = {};
+    try { d = JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}; } catch (e) { d = {}; }
+    d.appearance = { theme: theme, primary: primary, fontSize: fs, density: density };
+    localStorage.setItem(CFG_KEY, JSON.stringify(d));
+  } catch (e) {}
+}
+function restoreAppearance(){
+  let a = null;
+  try { a = JSON.parse(localStorage.getItem(CFG_KEY) || '{}').appearance; } catch (e) {}
+  if(!a) return;
+  const sel = document.getElementById('setTheme');
+  if(sel && a.theme) sel.value = a.theme;
+  if(a.primary){ const p = document.getElementById('setPrimary'); if(p) p.value = a.primary; }
+  if(a.fontSize){ const f = document.getElementById('setFontSize'); if(f) f.value = a.fontSize; }
+  if(a.density){ const dd = document.getElementById('setDensity'); if(dd) dd.value = a.density; }
+  applyAppearance();
+}
+
+/* 底部 Tab 顺序：按配置重排；未列出的 tab 隐藏 */
+function applyTabOrder(){
+  const raw = (document.getElementById('setTabOrder')?.value || '').trim();
+  const nav = document.querySelector('.tabbar');
+  if(!nav) return;
+  const map = {首页:'home',任务:'task',字典:'dict',设置:'set'};
+  const btns = [...nav.querySelectorAll('button[data-tab]')];
+  if(!raw){ btns.forEach(b=>b.style.display=''); return; }
+  const order = raw.split(/[,，]+/).map(s=>s.trim()).filter(Boolean);
+  btns.forEach(b=>{ b.style.display = 'none'; });
+  order.forEach(function(label){
+    const key = map[label];
+    const b = btns.find(x=>x.dataset.tab === key);
+    if(b){ b.style.display = ''; nav.appendChild(b); } // 追加到末尾即完成重排
+  });
+}
+/* 首页快捷按钮：按配置渲染 */
+function applyQuickButtons(){
+  const raw = (document.getElementById('setQuickBtns')?.value || '').trim();
+  const box = document.getElementById('homeQuickBtns');
+  if(!box) return;
+  const all = {
+    '字典': {label:'导入字典', fn:"go('dict','字典库')"},
+    '任务': {label:'新建任务', fn:"go('task','新建轮询任务')"},
+    '白名单': {label:'白名单', fn:"openSheet()"},
+    '扫描': {label:'扫描选择', fn:"openWifiPicker()"},
+  };
+  const keys = raw ? raw.split(/[,，]+/).map(s=>s.trim()).filter(Boolean) : ['字典','任务'];
+  box.innerHTML = keys.filter(k=>all[k]).map(k=>{
+    const it = all[k];
+    return '<button class="btn btn-ghost btn-sm" style="flex:1" onclick="' + it.fn + '">' + it.label + '</button>';
+  }).join('') || '<span class="hint">未启用快捷按钮</span>';
 }
 
 /* ---------- 原生桥（AutoX.js WebView 环境） ---------- */
@@ -736,9 +1011,27 @@ window.__cmdQueue = [];           // UI → 原生命令队列，由 main.js 轮
 function nativeSend(cmd, payload){
   window.__cmdQueue.push({cmd: cmd, payload: payload || null});
 }
-function currentSsid(){ if(currentTarget) return currentTarget;
-  const rows = document.querySelectorAll('#page-home .card b');
-  return (rows[0] && rows[0].textContent) || 'MyHome_5G';
+function backupData(){
+  if(!window.__AUTOX){ toast('浏览器预览：备份需真机'); return; }
+  const el = document.getElementById('backupResult');
+  if(el) el.textContent = '正在导出备份…';
+  nativeSend('backup_data');
+}
+function restoreData(){
+  if(!window.__AUTOX){ toast('浏览器预览：恢复需真机'); return; }
+  const path = (document.getElementById('restoreFilePath')?.value || '').trim();
+  if(!path){ toast('请填写备份文件路径'); return; }
+  openModal('确认恢复备份', '将用备份覆盖当前配置与字典，建议先导出一份当前备份。确认继续？', '确认恢复', function(){
+    const el = document.getElementById('backupResult');
+    if(el) el.textContent = '正在恢复…';
+    nativeSend('restore_data', {path: path});
+  });
+}
+function currentSsid(){
+  if(currentTarget) return currentTarget;
+  const el = document.getElementById('taskCurNet');
+  const v = el ? String(el.textContent || '').trim() : '';
+  return (v && v !== '--') ? v : ''; // 不再用演示 SSID 兜底，避免假目标进真实任务
 }
 /* ---------- 白名单状态层（单一数据源：隐藏字段 authWhitelist） ---------- */
 function parseSsidList(raw){
@@ -781,7 +1074,7 @@ function sigHtml(s){
     + '<b>' + signalBars(info.level) + '</b> ' + info.level + 'dBm</span>';
 }
 function wlRowHtml(s, i){
-  return '<div class="wl-row">'
+  return '<div class="wl-row" data-uil-row data-key="' + i + '">'
     + '<span class="idx">' + (i + 1) + '</span>'
     + '<span class="ssid">' + escHtml(s) + '</span>'
     + sigHtml(s)
@@ -789,29 +1082,42 @@ function wlRowHtml(s, i){
     + '<button class="del" onclick="wlDel(' + i + ')">✕</button>'
     + '</div>';
 }
+let wlQuery = '';
+function wlBindSearch(){
+  ['wlSearchAuth','wlSearchSet','wlSearchHome'].forEach(function(id){
+    const el = document.getElementById(id);
+    if(!el || el._wlBound) return;
+    el.addEventListener('input', function(){ wlQuery = this.value.trim(); renderWhitelist(); });
+    el._wlBound = true;
+  });
+}
 function renderWhitelist(){
   const list = getWL();
-  document.querySelectorAll('.wl-count').forEach(function(el){ el.textContent = list.length; });
+  // 搜索过滤，保留原始索引（删除/移动必须用原始下标）
+  const pairs = list.map(function(s, i){ return {s:s, i:i}; })
+    .filter(function(p){ return !wlQuery || p.s.toLowerCase().indexOf(wlQuery.toLowerCase()) >= 0; });
+  document.querySelectorAll('.wl-count').forEach(function(el){ el.textContent = wlQuery ? (pairs.length + '/' + list.length) : list.length; });
   const tAll = document.getElementById('tAllCount');
   if(tAll) tAll.textContent = list.length;
   const wlSel = document.getElementById('wlSelect');
   if(wlSel) wlSel.innerHTML = list.length
     ? list.map(function(name){ return '<option>' + escHtml(name) + '</option>'; }).join('')
     : '<option>（白名单为空）</option>';
-  [['wlScrollAuth','wlMoreAuth'],['wlScrollSet','wlMoreSet']].forEach(function(ids){
+  wlBindSearch();
+  [['wlScrollAuth','wlMoreAuth'],['wlScrollSet','wlMoreSet'],['wlScrollHome','wlMoreHome']].forEach(function(ids){
     const tb = document.getElementById(ids[0]);
     if(!tb) return;
     const more = document.getElementById(ids[1]);
-    const shown = wlExpanded ? list : list.slice(0, 5);
+    const shown = wlExpanded ? pairs : pairs.slice(0, 5);
     tb.innerHTML = shown.length
-      ? shown.map(function(s, i){ return wlRowHtml(s, i); }).join('')
-      : '<div class="wl-empty">白名单为空：手动添加、扫描选择或批量导入。</div>';
+      ? shown.map(function(p){ return wlRowHtml(p.s, p.i); }).join('')
+      : '<div class="wl-empty">' + (wlQuery ? '没有匹配的 SSID' : '白名单为空：手动添加、扫描选择或批量导入。') + '</div>';
     tb.parentElement.style.maxHeight = wlExpanded ? '240px' : 'none';
     tb.parentElement.style.overflowY = wlExpanded ? 'auto' : 'hidden';
     tb.parentElement.style.overflowX = 'auto'; // 横向滚动：长 SSID 不截断
-    if(list.length > 5){
+    if(pairs.length > 5){
       more.style.display = 'block';
-      more.textContent = wlExpanded ? '收起 ▴' : '展开更多（共 ' + list.length + ' 个）▾';
+      more.textContent = wlExpanded ? '收起 ▴' : '展开更多（共 ' + pairs.length + ' 个）▾';
       more.onclick = function(){ wlExpanded = !wlExpanded; renderWhitelist(); };
     } else {
       more.style.display = 'none';
@@ -909,16 +1215,16 @@ function closeWifiSheet(){
 function rescanWifi(){
   wifiScanning = true;
   document.getElementById('wifiCount').textContent = '0';
-  document.getElementById('wifiHint').textContent = '正在扫描附近 WiFi…（多轮合并约需 12 秒）';
-  document.getElementById('wifiList').innerHTML = '<p class="hint" style="text-align:center;padding:20px 0">🔄 扫描中…</p>';
+  document.getElementById('wifiHint').textContent = '正在扫描附近 WiFi…（6 轮合并，尽量多发现网络，约需 20–35 秒）';
+  document.getElementById('wifiList').innerHTML = '<p class="hint" style="text-align:center;padding:20px 0">🔄 扫描中，正在尽可能多地发现网络…</p>';
   if(window.__AUTOX){
     nativeSend('scan_wifi');
-    setTimeout(()=>{ // 原生 8 秒无响应则提示
+    setTimeout(()=>{ // 原生 6 轮最长约 30 秒，留余量 45 秒兜底
       if(wifiScanning){
         wifiScanning = false;
-        document.getElementById('wifiList').innerHTML = '<p class="hint">未收到扫描结果。请检查：① AutoX.js 已授予「位置信息」权限 ② 系统定位服务已开启 ③ 稍后点「重新扫描」。</p>';
+        document.getElementById('wifiList').innerHTML = '<p class="hint">扫描超时，未收到扫描结果。请确认系统定位服务已开启、AutoX.js 已授予「位置信息」权限，稍等片刻后再点「重新扫描」。</p>';
       }
-    }, 20000);
+    }, 45000);
   } else {
     // 浏览器预览模式：模拟几个条目以便查看布局
     setTimeout(()=>{
@@ -932,39 +1238,53 @@ function rescanWifi(){
     }, 600);
   }
 }
-function renderWifiList(networks){
+function sourceTagHtml(source){
+  if(source === 'current') return '<span class="tag ok">当前连接</span>';
+  if(source === 'saved') return '<span class="tag warn">已保存</span>';
+  return '<span class="tag">附近扫描</span>';
+}
+function renderWifiList(networks, reason){
   wifiScanning = false;
-  // 排除已在白名单中的网络（大小写不敏感）；信号快照不受影响（白名单表格信号列仍可用）
-  const wl = getWL().map(function(s){ return s.toLowerCase(); });
-  const shown = networks.filter(function(n){
-    return wl.indexOf(n.ssid.toLowerCase()) < 0;
-  });
-  document.getElementById('wifiCount').textContent = shown.length;
   const box = document.getElementById('wifiList');
-  if(!networks.length){
-    document.getElementById('wifiHint').textContent = '扫描不到网络：请确认系统定位服务已开启、AutoX.js 已获「位置信息」权限后重试。';
+  if(!networks || !networks.length){
+    const tips = {
+      no_permission: '缺少「位置信息」权限：被动扫描不可用，也未读到当前连接/已保存网络。请到系统设置授予后重试。',
+      location_off: '系统定位服务未开启：被动扫描不可用，也未读到当前连接/已保存网络。请打开「位置信息」后重试。',
+      throttled: '系统限制了 WiFi 扫描频率，且未读到当前连接/已保存网络：请稍等约 30 秒后再点「重新扫描」。',
+      empty: '三来源均为空：无当前连接、无已保存网络，附近也暂无可见网络。',
+      error: '扫描过程出现异常，可查看运行日志中的 wifi.log 定位原因。'
+    };
+    document.getElementById('wifiHint').textContent = tips[reason] || '未扫描到任何网络：请确认定位服务与权限后重试。';
+    document.getElementById('wifiCount').textContent = '0';
     box.innerHTML = '';
     return;
   }
-  if(!shown.length){
-    document.getElementById('wifiHint').textContent = '附近扫描到的网络均已在白名单中，无需重复添加。';
-    box.innerHTML = '';
-    return;
-  }
-  document.getElementById('wifiHint').textContent = '已按信号强度排序（最强在前），已过滤白名单中已有的网络。';
-  box.innerHTML = shown.map((n,i)=>`
-    <div class="entry" style="gap:8px">
-      <input type="checkbox" class="wifi-ck" data-ssid="${escHtml(n.ssid)}" onchange="syncWifiAll()">
+  const wl = getWL().map(function(s){ return s.toLowerCase(); });
+  document.getElementById('wifiCount').textContent = networks.length;
+  const part = reason ? {
+    no_permission:'（缺少定位权限，仅显示本地来源）',
+    location_off:'（定位服务关闭，仅显示本地来源）',
+    throttled:'（被动扫描被节流，含本地来源）'
+  }[reason] || '' : '';
+  document.getElementById('wifiHint').textContent = '含当前连接/已保存/附近扫描三来源，按信号强度排序（无信号的排末尾）' + part + '。';
+  box.innerHTML = networks.map((n)=>{
+    const joined = wl.indexOf(n.ssid.toLowerCase()) >= 0;
+    const sig = (n.level == null) ? '—' : signalBars(n.level);
+    return `<div class="entry" style="gap:8px">
+      <input type="checkbox" class="wifi-ck" data-ssid="${escHtml(n.ssid)}" ${joined?'checked disabled':''} onchange="syncWifiAll()">
       <span style="flex:1;min-width:0">${escHtml(n.ssid)}</span>
-      <span class="tag">${n.security}</span>
-      <span style="font-size:11px;color:var(--muted)">${signalBars(n.level)}</span>
-    </div>`).join('');
+      ${sourceTagHtml(n.source)}
+      <span class="tag ${joined?'ok':''}">${joined?'已加入白名单':'未加入'}</span>
+      <span class="tag">${escHtml(n.security || '—')}</span>
+      <span style="font-size:11px;color:var(--muted);min-width:34px;text-align:right">${sig}</span>
+    </div>`;
+  }).join('');
 }
 function toggleAllWifi(on){
-  document.querySelectorAll('#wifiList .wifi-ck').forEach(c=>c.checked = on);
+  document.querySelectorAll('#wifiList .wifi-ck:not([disabled])').forEach(c=>c.checked = on);
 }
 function syncWifiAll(){
-  const cks = [...document.querySelectorAll('#wifiList .wifi-ck')];
+  const cks = [...document.querySelectorAll('#wifiList .wifi-ck:not([disabled])')];
   document.getElementById('wifiAll').checked = cks.length > 0 && cks.every(c=>c.checked);
 }
 function applyWifiSelection(){
@@ -1016,16 +1336,49 @@ window.__onNativeEvent = function(name, data){
     setPermTag('permBatt', data && data.batt, '已忽略', '未设置');
     return;
   }
+  if(name === 'backup_result'){
+    const el = document.getElementById('backupResult');
+    if(el) el.textContent = (data && data.ok ? '✓ ' : '✗ ') + ((data && data.reason) || '完成') + ((data && data.path) ? '\n' + data.path : '');
+    toast(data && data.ok ? '备份已导出' : '备份失败');
+    return;
+  }
+  if(name === 'restore_result'){
+    const el = document.getElementById('backupResult');
+    if(el) el.textContent = (data && data.ok ? '✓ ' : '✗ ') + ((data && data.reason) || '完成');
+    toast(data && data.ok ? '恢复完成，请重启脚本' : '恢复失败');
+    return;
+  }
+  if(name === 'device_status'){
+    const d = data || {};
+    const el = document.getElementById('devStatus');
+    if(el){
+      const bat = (d.battery != null && d.battery >= 0) ? d.battery + '%' : '未知';
+      const tp = (d.temp != null && d.temp > 0) ? d.temp.toFixed(1) + '°C' : '未知';
+      el.textContent = '电量 ' + bat + ' · 温度 ' + tp + (d.charging ? ' · 充电中' : '');
+      el.className = 'tag ' + ((d.battery >= 0 && d.battery < 20) ? 'warn' : 'ok');
+    }
+    const wf = document.getElementById('devWifi');
+    if(wf){ wf.textContent = d.wifiOn ? '已开启' : '已关闭'; wf.className = 'tag ' + (d.wifiOn ? 'ok' : 'warn'); }
+    return;
+  }
   if(name === 'history_data'){
     renderHistory((data && data.list) || []);
     return;
   }
   if(name === 'dicts_data'){
-    renderDicts((data && data.list) || []);
+    var dlist = (data && data.list) || [];
+    renderDicts(dlist);
+    renderTaskDicts(dlist);
+    if(dictRefreshPending){ dictRefreshPending = false; toast('字典列表已刷新'); }
     return;
   }
   if(name === 'dict_entries'){
     curEntries = (data && data.entries) || [];
+    if(taskDictViewPending){
+      taskDictViewPending = false;
+      showTaskDictContent(data.name, curEntries);
+      return;
+    }
     if(curPage === 'entries') renderEntries(data.name, curEntries);
     if(curPage === 'dictEdit'){
       document.getElementById('deName').value = data.name || '';
@@ -1054,18 +1407,29 @@ window.__onNativeEvent = function(name, data){
     return;
   }
   if(name === 'download_txt_list'){
-    const files = (data && data.files) || [];
+    var d = data || {};
+    var files = d.files || [];
+    if(d.path) document.getElementById('dlPath').value = d.path;
+    if(d.path) document.getElementById('dlCurPath').textContent = '当前：' + d.path + ' · 找到 ' + files.length + ' 个 txt';
+    var sc = d.shortcuts || [];
+    document.getElementById('dlShortcuts').innerHTML = sc.map(function(p){
+      return '<button class="btn btn-ghost btn-sm" onclick="browseDlPath(\'' + escHtml(p) + '\')">' + escHtml(p) + '</button>';
+    }).join('');
     document.getElementById('dlList').innerHTML = files.length
       ? files.map(function(f){
-          return '<div class="item" onclick="importFromDownload(\'' + escHtml(f) + '\')">' + escHtml(f)
-            + ' <span class="tag">导入</span></div>';
+          return '<div class="item" style="word-break:break-all" onclick="importFromDownload(\'' + escHtml(f) + '\')">'
+            + escHtml(f) + ' <span class="tag">导入</span></div>';
         }).join('')
-      : '<p class="hint" style="text-align:center;padding:16px 0">Download 目录没有 txt 文件</p>';
+      : '<p class="hint" style="text-align:center;padding:16px 0">该目录没有 txt 文件</p>';
     return;
   }
   if(name === 'whitelist_imported'){
+    const imported = (data && data.list) || [];
+    // 原生已用文件列表替换 config.json；UI 同步替换隐藏字段（skipNative 避免回传环路）
+    // 只有真正读到内容时才替换，失败时保留现状
+    if(imported.length) setWL(imported, true);
     const t = document.getElementById('wlImportText');
-    t.value = mergeUnique(parseSsidList(t.value), (data && data.list) || []).join('\n');
+    if(t) t.value = imported.join('\n');
     toast((data && data.reason) || '文件导入完成');
     return;
   }
@@ -1073,70 +1437,161 @@ window.__onNativeEvent = function(name, data){
     // 更新信号快照（白名单表格的信号列由此驱动）
     WL_SCAN = {};
     ((data && data.networks) || []).forEach(function(n){
+      // 历史保存来源无 level，跳过以免 gradeOf/doSort 产生错误信号与 NaN
+      if(n.level == null) return;
       WL_SCAN[n.ssid.toLowerCase()] = {level: n.level, security: n.security};
     });
     renderWhitelist();
-    renderWifiList((data && data.networks) || []);
+    renderWifiList((data && data.networks) || [], (data && data.reason) || '');
     if(wlSortPending){ wlSortPending = false; doSort(); }
     return;
   }
   if(name === 'progress'){
-    runTried = data.tried;
-    document.getElementById('runCount').textContent = data.tried+'/'+data.total;
-    document.getElementById('runBar').style.width = (data.tried/data.total*100)+'%';
-    if(data.elapsedSec != null) document.getElementById('runTime').textContent = fmt(data.elapsedSec);
-    if(data.speed != null) document.getElementById('runSpeed').textContent = data.speed+'/分';
-    if(data.currentPwd != null) document.getElementById('curPwd').textContent = data.currentPwd;
-    if(data.text) addRunLog(data.text, data.cls||'');
+    var d = data || {};
+    // 只有带 tried/total 的才是进度事件；纯 {text,cls} 是日志
+    if(d.tried != null && d.total != null && d.total > 0){
+      runTried = d.tried;
+      document.getElementById('runCount').textContent = d.tried+'/'+d.total;
+      var pct = Math.min(100, Math.round(d.tried/d.total*100));
+      document.getElementById('runBar').style.width = pct+'%';
+      if(d.target){
+        var idx = runAllTargets.indexOf(d.target);
+        var tLabel = idx >= 0 ? ('目标 '+(idx+1)+'/'+runAllTargets.length+' · '+d.target) : d.target;
+        document.getElementById('runTarget').textContent = runAllTargets.length > 1 ? tLabel : d.target;
+      }
+      if(d.speed != null) document.getElementById('runSpeed').textContent = d.speed+'/分';
+      if(d.currentPwd != null){
+        lastPwd = d.currentPwd;
+        document.getElementById('curPwd').textContent = lastPwd; // 显示真实尝试密码
+      }
+      var phase = document.getElementById('runPhase');
+      if(phase) phase.textContent = d.phase === 'trying'
+        ? ('正在尝试第 ' + d.tried + '/' + d.total + ' 条…')
+        : ('第 ' + d.tried + '/' + d.total + ' 条已完成');
+    }
+    if(d.elapsedSec != null){ runSec = d.elapsedSec; document.getElementById('runTime').textContent = fmt(runSec); }
+    if(d.text) addRunLog(d.text, d.cls||'');
+  } else if(name === 'task_hit'){
+    hitPwd = (data && data.password) || '';
+    hitSsid = (data && data.ssid) || '';
+    document.getElementById('curPwd').textContent = hitPwd;
+    var hr = document.getElementById('hitRow');
+    if(hr){
+      hr.style.display = 'flex';
+      document.getElementById('hitResult').textContent = hitSsid + ' / ' + hitPwd;
+    }
+    var ph = document.getElementById('runPhase');
+    if(ph) ph.textContent = '命中 ' + hitSsid + '！';
+    addRunLog('命中 ' + hitSsid + ' · 密码：' + hitPwd, 'ok');
+  } else if(name === 'task_state'){
+    var s = (data && data.state) || '';
+    var stEl = document.getElementById('runStatus');
+    var pbEl = document.getElementById('pauseRunBtn');
+    if(s === 'paused'){
+      if(stEl){ stEl.textContent = '已暂停'; stEl.className = 'tag warn'; }
+      if(pbEl) pbEl.textContent = '▶ 继续';
+      runPaused = true;
+      addRunLog('任务已暂停', '');
+    } else if(s === 'running'){
+      if(stEl){ stEl.textContent = '运行中'; stEl.className = 'tag warn'; }
+      if(pbEl) pbEl.textContent = '⏸ 暂停';
+      runPaused = false;
+      addRunLog('任务已继续', '');
+    } else if(s === 'skipping'){
+      addRunLog('已跳过当前尝试', '');
+    } else if(s === 'stopping'){
+      if(stEl){ stEl.textContent = '停止中'; stEl.className = 'tag warn'; }
+      addRunLog('已请求停止，等待当前尝试结束…', '');
+    }
   } else if(name === 'task_done'){
+    runDone = true;
     if(window.__nativeTick){ clearInterval(window.__nativeTick); window.__nativeTick = null; }
-    stopRun(!!data.success);
+    finishRunUI(!!data.success, (data && data.reason) || '');
   }
 };
 
 /* ---------- 开始任务 ---------- */
 function confirmStart(){
   const targets = collectTargets();
+  if(!targets.length){ toast('请先选择目标网络'); return; }
+  if(!getSelectedDictNames().length){ toast('请至少勾选一个字典'); return; }
+  // 任务前二次确认开关关闭时直接开始（合规审计仍由原生强制记录）
+  const needConfirm = (document.getElementById('setTaskConfirm')?.checked) !== false;
+  if(!needConfirm){ startRun(); return; }
   const desc = targets.length > 1
     ? '目标网络：按白名单顺序 ' + targets.length + ' 个（' + targets.slice(0, 3).join(', ')
       + (targets.length > 3 ? '…' : '') + '）'
     : '目标网络：' + (targets[0] || '未选择');
-  openModal('确认开始任务', desc + '\n最大尝试：每目标 50 次\n请确认以上网络属于你或已获得书面授权。', '确认并开始', startRun);
+  openModal('确认开始任务', desc + '\n最大尝试：每目标 50 次（目标数上限 20，即单任务最多 1000 次）\n请确认以上网络属于你或已获得书面授权。', '确认并开始', startRun);
 }
-let runTimer = null, runSec = 0, runTried = 0;
+let runTimer = null, runSec = 0, runTried = 0, runAllTargets = [], runDone = false;
+let lastPwd = '', hitPwd = '', hitSsid = ''; // 当前尝试密码 / 命中密码 / 命中网络
 function collectTargets(){
   const radios = [...document.querySelectorAll('#page-task input[name=target]')];
   const idx = radios.findIndex(r => r.checked);
   if(idx === 1){ const v = (document.getElementById('manualSsid')?.value || '').trim(); return v ? [v] : []; }
   if(idx === 2){ const v = document.getElementById('wlSelect')?.value; return v ? [v] : []; }
-  if(idx === 3){ return getWL(); }
+  if(idx === 3){
+    const list = getWL();
+    const hasScan = list.some(function(s){ return WL_SCAN[s.toLowerCase()] != null; });
+    return hasScan ? wlSortedBySignal() : list;
+  }
   return [currentSsid()];
 }
 function startRun(){
   go('run','运行监控');
-  document.getElementById('homeRun').textContent = '运行中';
-  document.getElementById('homeRun').className = 'tag warn';
+  // 完整重置运行页所有显示，避免二次进入残留
+  runSec = 0; runTried = 0; runDone = false;
+  lastPwd = ''; hitPwd = ''; hitSsid = '';
   document.getElementById('runLog').innerHTML = '';
-  runSec = 0; runTried = 0;
+  document.getElementById('runCount').textContent = '0/0';
+  document.getElementById('runBar').style.width = '0%';
+  document.getElementById('runSpeed').textContent = '0/分';
+  document.getElementById('runTime').textContent = '00:00';
+  document.getElementById('curPwd').textContent = '••••••';
+  var hr = document.getElementById('hitRow'); if(hr) hr.style.display = 'none';
+  var phEl = document.getElementById('runPhase'); if(phEl) phEl.textContent = '任务提交中…';
+  var st = document.getElementById('runStatus');
+  if(st){ st.textContent = '运行中'; st.className = 'tag warn'; }
+  var pb = document.getElementById('pauseRunBtn');
+  if(pb) pb.textContent = '⏸ 暂停';
+  runPaused = false;
   if(window.__AUTOX){
     /* 真机：提交给本地引擎（engine.js），合规校验在原生侧强制执行 */
     const targets = collectTargets();
     if(!targets.length){ toast('请先选择目标网络'); return; }
+    runAllTargets = targets.slice();
+    document.getElementById('homeRun').textContent = '运行中';
+    document.getElementById('homeRun').className = 'tag warn';
     const runTarget = document.getElementById('runTarget');
     if(runTarget) runTarget.textContent = targets.length > 1
       ? targets[0] + ' 等 ' + targets.length + ' 个（按顺序）' : targets[0];
     addRunLog('任务提交 · 目标 ' + runTarget.textContent + ' · 等待合规校验…');
+    var maxAttempts = Math.min(50, Math.max(1, parseInt(document.getElementById('taskMaxAttempts')?.value, 10) || 50));
+    var intervalSec = Math.max(1, parseInt(document.getElementById('taskInterval')?.value, 10) || 3);
+    var timeoutSec = Math.max(5, parseInt(document.getElementById('taskTimeout')?.value, 10) || 20);
+    var forgetAfterFail = !!(document.getElementById('taskForget')?.checked);
+    var dictNames = getSelectedDictNames();
     nativeSend('start_task', {
-      ssid: targets[0], targets: targets, maxAttempts: 50, intervalSec: 3,
+      ssid: targets[0], targets: targets,
+      maxAttempts: maxAttempts, intervalSec: intervalSec, timeoutSec: timeoutSec,
+      forgetAfterFail: forgetAfterFail,
+      keepAwake: !!(document.getElementById('setKeepAwake')?.checked),
+      dictNames: dictNames,
       whitelist: getWL(),
       onHit: (document.getElementById('onHitSelect')?.value === 'continue' ? 'continue' : 'stop'),
+      hooks: {
+        onStart: (document.getElementById('hookStart')?.value || '').trim(),
+        onAttempt: (document.getElementById('hookAttempt')?.value || '').trim(),
+        onFinish: (document.getElementById('hookFinish')?.value || '').trim(),
+      },
     });
-    if(!window.__nativeTick){
-      window.__nativeTick = setInterval(()=>{
-        runSec++;
-        document.getElementById('runTime').textContent = fmt(runSec);
-      }, 1000);
-    }
+    if(window.__nativeTick){ clearInterval(window.__nativeTick); window.__nativeTick = null; }
+    window.__nativeTick = setInterval(()=>{
+      if(runPaused || runDone) return; // 暂停/结束后不计时
+      runSec++;
+      document.getElementById('runTime').textContent = fmt(runSec);
+    }, 1000);
     return;
   }
   /* 浏览器模拟路径（用于桌面预览） */
@@ -1155,7 +1610,7 @@ function startRun(){
       document.getElementById('runCount').textContent = runTried+'/50';
       document.getElementById('runBar').style.width = (runTried/50*100)+'%';
       document.getElementById('runSpeed').textContent = (runTried/(runSec/60)).toFixed(1)+'/分';
-      if(!fail){ clearInterval(runTimer); stopRun(true); }
+      if(!fail){ clearInterval(runTimer); finishRunUI(true); }
     }
     document.getElementById('runTime').textContent = fmt(runSec);
   }, 1000);
@@ -1168,14 +1623,32 @@ function addRunLog(text, cls){
   const box = document.getElementById('runLog');
   box.appendChild(d); box.scrollTop = box.scrollHeight;
 }
-function stopRun(success){
-  if(window.__AUTOX) nativeSend('stop_task');
+/* 用户点"停止"按钮：发停止命令，UI 先显示"停止中"，最终由 task_done 收尾 */
+function stopRun(){
+  if(runDone) return;
+  if(window.__AUTOX){
+    nativeSend('stop_task');
+    var st = document.getElementById('runStatus');
+    if(st){ st.textContent = '停止中'; st.className = 'tag warn'; }
+    addRunLog('已请求停止，等待当前尝试结束…');
+  } else {
+    clearInterval(runTimer);
+    finishRunUI(false);
+  }
+}
+/* 任务结束的统一 UI 收尾（真机由 task_done 触发） */
+function finishRunUI(success, reason){
+  runDone = true;
+  if(window.__nativeTick){ clearInterval(window.__nativeTick); window.__nativeTick = null; }
   clearInterval(runTimer);
-  document.getElementById('runStatus').textContent = success?'已成功':'已停止';
-  document.getElementById('runStatus').className = success?'tag ok':'tag danger';
-  document.getElementById('homeRun').textContent = success?'已成功':'已停止';
+  var label = success ? '已成功' : '已停止';
+  var st = document.getElementById('runStatus');
+  if(st){ st.textContent = label + (reason ? ' · ' + reason : ''); st.className = success?'tag ok':'tag danger'; }
+  document.getElementById('homeRun').textContent = label;
   document.getElementById('homeRun').className = success?'tag ok':'tag';
-  addRunLog(success?'任务成功结束':'任务已手动停止', success?'ok':'');
+  addRunLog(success?'任务成功结束':'任务结束' + (reason ? '：'+reason : ''), success?'ok':'fail');
+  var phEl = document.getElementById('runPhase');
+  if(phEl) phEl.textContent = success ? '任务完成 · 已命中' : ('任务' + (reason ? '：'+reason : '已结束'));
   if(success) toast('已成功连接');
 }
 function skipTask(){
@@ -1186,24 +1659,63 @@ function skipTask(){
 let runPaused = false;
 function togglePauseRun(){
   if(!window.__AUTOX){ toast('浏览器预览'); return; }
-  runPaused = !runPaused;
-  nativeSend(runPaused ? 'pause_task' : 'resume_task');
-  document.getElementById('pauseRunBtn').textContent = runPaused ? '▶ 继续' : '⏸ 暂停';
-  toast(runPaused ? '已暂停' : '已继续');
+  nativeSend(runPaused ? 'resume_task' : 'pause_task'); // 状态由 task_state 事件统一驱动
 }
+let pwdMaskTimer = null;
 function togglePwd(){
   const el = document.getElementById('curPwd');
-  el.textContent = el.textContent.includes('•') ? 'home2024' : '••••••';
+  const real = hitPwd || lastPwd;
+  if(!real){ el.textContent = '••••••'; return; }
+  if(pwdMaskTimer){ clearTimeout(pwdMaskTimer); pwdMaskTimer = null; }
+  const masked = el.textContent.includes('•');
+  if(masked){
+    el.textContent = real;
+    const sec = parseInt(document.getElementById('setPwdMaskSec')?.value || '0', 10);
+    if(sec > 0) pwdMaskTimer = setTimeout(function(){ el.textContent = '••••••'; pwdMaskTimer = null; }, sec * 1000);
+  } else {
+    el.textContent = '••••••'; // -1（点击切换）与再次点击均恢复遮罩
+  }
 }
 
 /* ---------- 配置持久化（localStorage） ---------- */
-const CFG_KEY = 'wfp_cfg_v4'; // v4：仅显式持久化（授权/白名单/目标）
+const CFG_KEY = 'wfp_cfg_v5'; // v5：授权/白名单/目标 + 任务页全部策略 + 字典勾选
 function persistCfg(){
   try {
+    // 目标方式 radio
+    var radios = document.querySelectorAll('#page-task input[name=target]');
+    var targetIdx = 0;
+    radios.forEach(function(r,i){ if(r.checked) targetIdx = i; });
+    // 保留外观配置（applyAppearance 单独写入，避免被整体覆盖清掉）
+    var appearance = null;
+    try { appearance = JSON.parse(localStorage.getItem(CFG_KEY) || '{}').appearance; } catch (e) {}
     localStorage.setItem(CFG_KEY, JSON.stringify({
+      appearance: appearance,
       auth: document.getElementById('authCheck').checked,
       whitelist: getWL(),
       target: currentTarget,
+      // 任务页
+      targetIdx: targetIdx,
+      manualSsid: (document.getElementById('manualSsid')?.value || '').trim(),
+      wlTarget: document.getElementById('wlSelect')?.value || '',
+      onHit: document.getElementById('onHitSelect')?.value || 'stop',
+      maxAttempts: document.getElementById('taskMaxAttempts')?.value,
+      intervalSec: document.getElementById('taskInterval')?.value,
+      timeoutSec: document.getElementById('taskTimeout')?.value,
+      forgetAfterFail: !!(document.getElementById('taskForget')?.checked),
+      taskConfirm: (document.getElementById('setTaskConfirm')?.checked) !== false,
+      tabOrder: document.getElementById('setTabOrder')?.value || '',
+      quickBtns: document.getElementById('setQuickBtns')?.value || '',
+      pwdMaskSec: document.getElementById('setPwdMaskSec')?.value || '0',
+      keepAwake: !!(document.getElementById('setKeepAwake')?.checked),
+      hooks: {
+        onStart: document.getElementById('hookStart')?.value || '',
+        onAttempt: document.getElementById('hookAttempt')?.value || '',
+        onFinish: document.getElementById('hookFinish')?.value || '',
+      },
+      // 字典勾选
+      selectedDicts: taskSelectedDicts || {},
+      // 字典编辑页规则链（规则配置也值得缓存）
+      rules: collectRules ? collectRules() : null,
     }));
   } catch (e) {}
 }
@@ -1224,6 +1736,39 @@ function restoreCfg(){
     const hn = document.getElementById('homeCurNet');
     if(hn) hn.textContent = d.target;
   }
+  // 任务页目标方式
+  if(d.targetIdx != null){
+    var rs = document.querySelectorAll('#page-task input[name=target]');
+    if(rs[d.targetIdx]) rs[d.targetIdx].checked = true;
+  }
+  if(d.manualSsid != null){ var ms = document.getElementById('manualSsid'); if(ms) ms.value = d.manualSsid; }
+  // 白名单目标值：下拉可能还没填充，先存起来，等 initTaskPage 填充后再选
+  if(d.wlTarget != null) window.__restoreWlTarget = d.wlTarget;
+  if(d.onHit != null){ var oh = document.getElementById('onHitSelect'); if(oh) oh.value = d.onHit; }
+  if(d.maxAttempts != null){ var ma = document.getElementById('taskMaxAttempts'); if(ma) ma.value = d.maxAttempts; }
+  if(d.intervalSec != null){ var it = document.getElementById('taskInterval'); if(it) it.value = d.intervalSec; }
+  if(d.timeoutSec != null){ var ts = document.getElementById('taskTimeout'); if(ts) ts.value = d.timeoutSec; }
+  if(d.forgetAfterFail != null){ var ff = document.getElementById('taskForget'); if(ff) ff.checked = !!d.forgetAfterFail; }
+  if(d.taskConfirm != null){ var tc = document.getElementById('setTaskConfirm'); if(tc) tc.checked = !!d.taskConfirm; }
+  if(d.tabOrder != null){ var to = document.getElementById('setTabOrder'); if(to) to.value = d.tabOrder; }
+  if(d.quickBtns != null){ var qb = document.getElementById('setQuickBtns'); if(qb) qb.value = d.quickBtns; }
+  if(d.pwdMaskSec != null){ var pm = document.getElementById('setPwdMaskSec'); if(pm) pm.value = d.pwdMaskSec; }
+  if(d.keepAwake != null){ var ka = document.getElementById('setKeepAwake'); if(ka) ka.checked = !!d.keepAwake; }
+  if(d.hooks && typeof d.hooks === 'object'){
+    ['hookStart','hookAttempt','hookFinish'].forEach(function(id){
+      const el = document.getElementById(id);
+      const key = id === 'hookStart' ? 'onStart' : (id === 'hookAttempt' ? 'onAttempt' : 'onFinish');
+      if(el && d.hooks[key] != null) el.value = d.hooks[key];
+    });
+  }
+  applyTabOrder();
+  applyQuickButtons();
+  // 字典勾选：存为对象，等字典列表加载后按名字恢复
+  if(d.selectedDicts && typeof d.selectedDicts === 'object') window.__restoreSelectedDicts = d.selectedDicts;
+  // 规则链
+  if(d.rules){ try { restoreRules(d.rules); } catch (e) {} }
+  // 已授权用户启动时直接进入首页，避免停在授权页导致「首页 tab 高亮但页面仍是授权页」
+  if(d.auth && curPage === 'auth') go('home','Wi-Fi 字典轮询器');
 }
 /* ---------- 任务历史（渲染/拉取） ---------- */
 function renderHistory(list){
@@ -1252,6 +1797,10 @@ function setPermTag(id, ok, on, off){
 function openAccSettings(){ if(window.__AUTOX) nativeSend('open_acc_settings'); }
 function openOverlaySettings(){ if(window.__AUTOX) nativeSend('open_overlay_settings'); }
 function openBattOpt(){ if(window.__AUTOX) nativeSend('open_batt_opt'); }
+function resetPanelPos(){
+  if(window.__AUTOX) nativeSend('reset_panel_pos');
+  else toast('浏览器预览：仅演示');
+}
 document.addEventListener('change', function(e){
   persistCfg();
   if(e.target && (e.target.id === 'rLower' || e.target.id === 'rLen' || e.target.id === 'rRegex' || e.target.id === 'rBlack' || e.target.id === 'rSortLen' || e.target.id === 'rVarCase' || e.target.id === 'rPrefix' || e.target.id === 'rSuffix' || e.target.id === 'rNums')) updateDeStats();
@@ -1263,13 +1812,138 @@ let DICTS = [];
 let curDict = null;
 let curEntries = [];
 let entryChecked = Object.create(null);
+let taskDictViewPending = false;
+let taskSelectedDicts = null; // null=全部启用字典；对象={字典名:true/false}
 
-function refreshDicts(){
+/* ---------- 任务页：真实字典列表 + 内容查看 ---------- */
+function initTaskPage(){
+  const wl = getWL();
+  const curNet = document.getElementById('taskCurNet');
+  if(curNet) curNet.textContent = currentTarget || (wl.length ? wl[0] : '--');
+  const sel = document.getElementById('wlSelect');
+  if(sel){
+    sel.innerHTML = wl.length
+      ? wl.map(function(s){ return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('')
+      : '<option value="">（白名单为空）</option>';
+    // 恢复上次选中的白名单目标
+    if(window.__restoreWlTarget != null){
+      for(var i=0;i<sel.options.length;i++){
+        if(sel.options[i].value === window.__restoreWlTarget){ sel.value = window.__restoreWlTarget; break; }
+      }
+      window.__restoreWlTarget = null;
+    }
+  }
+  const cnt = document.getElementById('tAllCount');
+  if(cnt) cnt.textContent = wl.length;
+  if(window.__AUTOX) nativeSend('get_dicts');
+  else renderTaskDicts([{name:'demo-test',count:20,enabled:true},{name:'test-single',count:1,enabled:true}]);
+}
+let taskDictListUI = null;
+function renderTaskDicts(list){
+  const box = document.getElementById('taskDictList');
+  if(!box) return;
+  DICTS = list || [];
+  if(!taskSelectedDicts){
+    taskSelectedDicts = Object.create(null);
+    // 优先用缓存的勾选；无缓存则默认全选启用字典
+    if(window.__restoreSelectedDicts && typeof window.__restoreSelectedDicts === 'object'){
+      DICTS.forEach(function(d){
+        taskSelectedDicts[d.name] = window.__restoreSelectedDicts[d.name] === true;
+      });
+      window.__restoreSelectedDicts = null;
+    } else {
+      DICTS.forEach(function(d){ if(d.enabled !== false) taskSelectedDicts[d.name] = true; });
+    }
+  }
+  // 清理已删除的字典项
+  Object.keys(taskSelectedDicts).forEach(function(n){
+    if(!DICTS.some(function(d){ return d.name === n; })) delete taskSelectedDicts[n];
+  });
+  if(!taskDictListUI){
+    taskDictListUI = UIList.mount({
+      box:'taskDictList', data:DICTS,
+      key:function(d){ return d.name; },
+      text:function(d){ return d.name; },
+      empty:'没有字典。请先到「字典库」新建或导入 txt。',
+      searchBox:'taskDictSearch', selectAllBox:'taskDictSelectAll',
+      selectable:true,
+      row:function(d){
+        const dis = d.enabled === false ? ' <span class="tag">已停用</span>' : '';
+        return '<div class="rule" style="align-items:center" data-uil-row data-key="' + escHtml(d.name) + '">{{CK}}'
+          + '<span class="name">' + escHtml(d.name) + dis + '</span>'
+          + '<span class="tag">' + d.count + ' 条</span>'
+          + '<button class="btn btn-ghost btn-sm" onclick="viewTaskDict(\'' + escHtml(d.name) + '\')">查看</button>'
+          + '</div>';
+      },
+      onSelectChange:function(keys){
+        taskSelectedDicts = Object.create(null);
+        keys.forEach(function(k){ taskSelectedDicts[k] = true; });
+        persistCfg();
+      }
+    });
+  } else {
+    taskDictListUI.cfg.data = DICTS;
+  }
+  // 同步预置勾选态
+  taskDictListUI.state.checked = Object.create(null);
+  DICTS.forEach(function(d){ if(taskSelectedDicts[d.name]) taskDictListUI.state.checked[d.name] = true; });
+  taskDictListUI.render();
+}
+function toggleTaskDict(name, checked){
+  if(!taskSelectedDicts) taskSelectedDicts = Object.create(null);
+  taskSelectedDicts[name] = !!checked;
+  persistCfg(); // 勾选变化立即缓存
+}
+function viewTaskDict(name){
+  if(!window.__AUTOX){ toast('浏览器预览：请到字典库查看'); return; }
+  taskDictViewPending = true;
+  nativeSend('get_dict_entries', {name: name});
+}
+function showTaskDictContent(name, entries){
+  document.getElementById('tdvName').textContent = name || '字典内容';
+  document.getElementById('tdvCount').textContent = '共 ' + (entries ? entries.length : 0) + ' 条';
+  document.getElementById('tdvContent').innerHTML = (entries && entries.length)
+    ? entries.map(function(e,i){ return String(i+1).padStart(3,' ') + '. ' + escHtml(e); }).join('<br>')
+    : '<span class="hint">（空字典）</span>';
+  showSheet('taskDictViewSheet');
+}
+function getSelectedDictNames(){
+  if(!taskSelectedDicts) return [];
+  return Object.keys(taskSelectedDicts).filter(function(n){ return taskSelectedDicts[n]; });
+}
+
+function openDlImport(){
+  showSheet('dlSheet');
+  if(window.__AUTOX){ nativeSend('list_download_txt', {path: document.getElementById('dlPath').value || '/sdcard/Download/'}); }
+  else {
+    document.getElementById('dlList').innerHTML = '<p class="hint" style="text-align:center;padding:16px 0">浏览器预览不支持读取文件目录</p>';
+  }
+}
+function browseDlPath(path){
+  if(path != null){ document.getElementById('dlPath').value = path; }
+  var p = document.getElementById('dlPath').value.trim();
+  if(!p){ toast('请输入目录路径'); return; }
+  if(!window.__AUTOX){ toast('浏览器预览：仅演示'); return; }
+  nativeSend('list_download_txt', {path: p});
+}
+function importFromDownload(fullPath){
+  if(!window.__AUTOX){ toast('浏览器预览：仅演示'); return; }
+  nativeSend('import_from_download', {path: fullPath});
+  toast('正在导入：' + fullPath.split('/').pop());
+  closeSheet('dlSheet');
+  setTimeout(refreshDicts, 900);
+}
+
+let dictRefreshPending = false;
+function refreshDicts(showToast){
+  if(showToast) dictRefreshPending = true;
   if(window.__AUTOX){ nativeSend('get_dicts'); }
   else {
     renderDicts([{name:'demo-test', count:20, enabled:true, desc:'演示字典（浏览器预览）'}]);
+    if(showToast) toast('已刷新');
   }
 }
+let dictListUI = null;
 function renderDicts(list){
   DICTS = list || [];
   const totalE = DICTS.reduce(function(a,d){ return a + d.count; }, 0);
@@ -1277,20 +1951,50 @@ function renderDicts(list){
   document.getElementById('dsCount').textContent = DICTS.length + ' 个';
   document.getElementById('dsEntries').textContent = totalE;
   document.getElementById('dsEnabled').textContent = en.length + ' 个 / ' + en.reduce(function(a,d){ return a + d.count; }, 0) + ' 条';
-  const box = document.getElementById('dictList');
-  box.innerHTML = DICTS.length ? DICTS.map(function(d){
-    return '<div class="dict-card">'
-      + '<div class="body">'
-      + '<div class="name">' + escHtml(d.name) + ' <span class="tag ' + (d.enabled ? 'ok' : '') + '">' + (d.enabled ? '启用' : '停用') + '</span></div>'
-      + '<div class="meta">' + d.count + ' 条 · ' + escHtml(d.desc || '') + '</div>'
-      + '<div class="ops">'
-      + '<button onclick="openEntries(\'' + escHtml(d.name) + '\')">条目</button>'
-      + '<button onclick="openDictEdit(\'' + escHtml(d.name) + '\')">编辑</button>'
-      + '<button onclick="deleteDict(\'' + escHtml(d.name) + '\')">删除</button>'
-      + '</div></div>'
-      + '<label class="switch"><input type="checkbox" ' + (d.enabled ? 'checked' : '') + ' onchange="setDictEnabled(\'' + escHtml(d.name) + '\', this.checked)"><span></span></label>'
-      + '</div>';
-  }).join('') : '<div class="card"><div class="wl-empty">还没有字典：新建、或从 Download 导入 txt。</div></div>';
+  if(!dictListUI){
+    dictListUI = UIList.mount({
+      box:'dictList', data:DICTS,
+      key:function(d){ return d.name; },
+      text:function(d){ return d.name + ' ' + (d.desc || ''); },
+      empty:'还没有字典：新建、或从 Download 导入 txt。',
+      searchBox:'dictSearch', selectAllBox:'dictSelectAll', bulkBar:'dictBulk',
+      sortBar:'dictSortBar',
+      sort:{
+        defaultKey:'name',
+        labels:{name:'按名称',count:'按条数',enabled:'按启用'},
+        fns:{
+          name:function(a){ return a.slice().sort(function(x,y){ return String(x.name).localeCompare(String(y.name)); }); },
+          count:function(a){ return a.slice().sort(function(x,y){ return (y.count||0)-(x.count||0); }); },
+          enabled:function(a){ return a.slice().sort(function(x,y){ return (y.enabled?1:0)-(x.enabled?1:0); }); }
+        }
+      },
+      selectable:true, deletable:false,
+      row:function(d, i){
+        return '<div class="dict-card" data-uil-row data-key="' + escHtml(d.name) + '">'
+          + '{{CK}}<div class="body">'
+          + '<div class="name">' + escHtml(d.name) + ' <span class="tag ' + (d.enabled ? 'ok' : '') + '">' + (d.enabled ? '启用' : '停用') + '</span></div>'
+          + '<div class="meta">' + d.count + ' 条 · ' + escHtml(d.desc || '') + '</div>'
+          + '<div class="ops">'
+          + '<button onclick="openEntries(\'' + escHtml(d.name) + '\')">条目</button>'
+          + '<button onclick="openDictEdit(\'' + escHtml(d.name) + '\')">编辑</button>'
+          + '<button onclick="deleteDict(\'' + escHtml(d.name) + '\')">删除</button>'
+          + '</div></div>'
+          + '<label class="switch"><input type="checkbox" ' + (d.enabled ? 'checked' : '') + ' onchange="setDictEnabled(\'' + escHtml(d.name) + '\', this.checked)"><span></span></label>'
+          + '</div>';
+      },
+      onBatchDelete:function(keys){
+        if(!keys.length) return;
+        openModal('批量删除字典', '将删除选中的 ' + keys.length + ' 个字典及其文件，不可恢复。', '删除', function(){
+          keys.forEach(function(name){ nativeSend('delete_dict', {name: name}); });
+          toast('已请求删除 ' + keys.length + ' 个字典');
+          setTimeout(refreshDicts, 600);
+        });
+      }
+    });
+  } else {
+    dictListUI.cfg.data = DICTS;
+    dictListUI.render();
+  }
 }
 function openDicts(){ go('dict', '字典库'); refreshDicts(); }
 function openNewDict(){ showSheet('newDictSheet'); document.getElementById('ndName').value = ''; }
@@ -1346,24 +2050,53 @@ function setDictEnabled(name, enabled){
   nativeSend('set_dict_enabled', {name: name, enabled: enabled});
   toast(enabled ? '已启用' : '已停用');
 }
+let entryListUI = null;
+function entryItems(){ return curEntries.map(function(e, i){ return {v:e, i:i}; }); }
 function deleteSelectedEntries(){
-  const keep = curEntries.filter(function(e, i){ return !entryChecked[i]; });
-  if(keep.length === curEntries.length){ toast('未勾选任何条目'); return; }
+  if(!entryListUI){ toast('未勾选任何条目'); return; }
+  const keys = entryListUI.checkedKeys();
+  if(!keys.length){ toast('未勾选任何条目'); return; }
+  const idx = Object.create(null);
+  keys.forEach(function(k){ idx[Number(k)] = true; });
+  const keep = curEntries.filter(function(e, i){ return !idx[i]; });
   openModal('删除选中条目', '将删除勾选的 ' + (curEntries.length - keep.length) + ' 条。', '删除', function(){
-    nativeSend('save_dict', {name: curDict, content: keep.join('\n')});
+    if(window.__AUTOX) nativeSend('save_dict', {name: curDict, content: keep.join('\n')});
     curEntries = keep;
     renderEntries(curDict, keep);
+    toast('已删除 ' + (keys.length) + ' 条');
   });
 }
 function renderEntries(name, entries){
   document.getElementById('enName').textContent = name;
   document.getElementById('enCount').textContent = entries.length;
-  entryChecked = Object.create(null);
-  const box = document.getElementById('entryList');
-  box.innerHTML = entries.length ? entries.map(function(e, i){
-    return '<div class="entry"><input type="checkbox" onchange="entryChecked[' + i + ']=this.checked">'
-      + '<span class="pwd">' + escHtml(e) + '</span></div>';
-  }).join('') : '<div class="wl-empty">空字典</div>';
+  const items = entryItems();
+  if(!entryListUI){
+    entryListUI = UIList.mount({
+      box:'entryList', data:items,
+      key:function(it){ return String(it.i); },
+      text:function(it){ return it.v; },
+      empty:'空字典', maxHeight:'440px',
+      searchBox:'entrySearch', selectAllBox:'entrySelectAll', bulkBar:'entryBulk', sortBar:'entrySortBar',
+      sort:{
+        defaultKey:'origin',
+        labels:{origin:'原顺序',lenAsc:'长度↑',lenDesc:'长度↓'},
+        fns:{
+          origin:function(a){ return a.slice(); },
+          lenAsc:function(a){ return a.slice().sort(function(x,y){ return x.v.length - y.v.length; }); },
+          lenDesc:function(a){ return a.slice().sort(function(x,y){ return y.v.length - x.v.length; }); }
+        }
+      },
+      selectable:true,
+      row:function(it){
+        return '<div class="entry" data-uil-row data-key="' + it.i + '">{{CK}}'
+          + '<span class="pwd">' + escHtml(it.v) + '</span></div>';
+      },
+      onBatchDelete:function(){ deleteSelectedEntries(); }
+    });
+  } else {
+    entryListUI.cfg.data = items;
+    entryListUI.render();
+  }
 }
 
 /* ---------- 保存规则链 ---------- */
@@ -1382,6 +2115,19 @@ function collectRules(){
     suffix: document.getElementById('rSuffix').checked ? document.getElementById('rSuffixText').value : '',
     nums: document.getElementById('rNums').checked ? document.getElementById('rNumsText').value.trim() : '',
   };
+}
+function restoreRules(r){
+  if(!r) return;
+  function set(id, v){ var el = document.getElementById(id); if(el && v != null) el.checked = !!v; }
+  function setv(id, v){ var el = document.getElementById(id); if(el && v != null) el.value = v; }
+  set('rLower', r.lower); set('rLen', r.len);
+  setv('rMin', r.min); setv('rMax', r.max);
+  set('rRegex', !!r.regex); setv('rRegexText', r.regex || '');
+  set('rBlack', !!(r.blacklist && r.blacklist.length)); setv('rBlackText', (r.blacklist||[]).join(', '));
+  set('rSortLen', r.sortLen); set('rVarCase', r.varCase);
+  set('rPrefix', !!r.prefix); setv('rPrefixText', r.prefix || '');
+  set('rSuffix', !!r.suffix); setv('rSuffixText', r.suffix || '');
+  set('rNums', !!r.nums); setv('rNumsText', r.nums || '');
 }
 function expandNums(v){
   const out = [];
@@ -1446,119 +2192,16 @@ function updateDeStats(){
   document.getElementById('deStats').textContent =
     raw.length + ' / ' + uniq + ' / 规则后 ' + processed.length;
 }
-function saveDictEditWrap(){}
-
-/* ---------- 日志页（真实数据） ---------- *//* ---------- 日志页（真实数据） ---------- */
-function logCls(line){
-  if(/命中|TASK_SUCCESS|已成功|成功$/.test(line)) return 'ok';
-  if(/密码错误|密码不正确|超时|未找到|失败|REJECT|手动停止|TASK_END|结束/.test(line)) return 'fail';
-  return '';
-}
-function renderLogBox(id, lines){
-  const box = document.getElementById(id);
-  if(!lines || !lines.length){ box.innerHTML = '<div class="wl-empty">暂无</div>'; return; }
-  box.innerHTML = lines.map(function(l){
-    return '<div class="log-line ' + logCls(l) + '"><b>' + escHtml(l) + '</b></div>';
-  }).join('');
-}
-function renderLogs(data){
-  renderLogBox('logAudit', data && data.audit);
-  renderLogBox('logRuntime', data && data.runtime);
-}
-function refreshLogs(){
-  if(window.__AUTOX){ nativeSend('get_logs'); }
-  else {
-    // 浏览器预览：演示数据
-    renderLogs({
-      audit: ['[2026-11-19 05:00:00] APP_LAUNCH | 浏览器预览', '[2026-11-19 05:00:01] TASK_START | ssid=演示网络 maxAttempts=50'],
-      runtime: ['05:00:02 第 1 条 · 密码错误', '05:00:05 第 2 条 · 命中'],
-    });
-  }
-}
-function exportLogs(){
-  if(window.__AUTOX){ nativeSend('export_logs'); }
-  else { toast('浏览器预览无导出'); }
-}
-function clearRuntimeLog(){
-  openModal('清空运行日志', '将清空 runtime.log（不影响审计日志）。审计日志不可清空。', '清空', function(){
-    if(window.__AUTOX) nativeSend('clear_runtime_log');
-    else { renderLogs({ audit: [], runtime: [] }); toast('已清空'); }
-  });
-}
 
 /* ---------- 初始化 ---------- */
 document.querySelector('.tabbar button').classList.add('on');
+restoreAppearance();
 restoreCfg();
 renderWhitelist();
 if(window.__AUTOX) nativeSend('get_whitelist'); // 页面就绪后拉取原生权威白名单
 if(window.__AUTOX) nativeSend('get_history'); // 拉取任务历史
-</script>
-</body>
-</html>);
-  v.split(/[,，]+/).map(function(t){ return t.trim(); }).filter(Boolean).forEach(function(t){
-    const m = t.match(rangeRe);
-    if(m){
-      const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
-      if(b - a <= 10000){
-        for(let i = Math.min(a, b); i <= Math.max(a, b); i++) out.push(String(i));
-      }
-    } else out.push(t);
-  });
-  return out;
-}
-function applyRules(lines, r){
-  let out = lines.filter(function(s){ return s.length > 0; });
-  // 扩展规则：先变换内容（变体/追加数字/前后缀）
-  if(r.varCase){
-    const exp = [];
-    out.forEach(function(l){
-      exp.push(l, l.charAt(0).toUpperCase() + l.slice(1), l.toUpperCase());
-    });
-    out = exp;
-  }
-  if(r.nums){
-    const nums = expandNums(r.nums);
-    const exp = [];
-    out.forEach(function(l){ nums.forEach(function(x){ exp.push(l + x); }); });
-    out = exp;
-  }
-  if(r.prefix) out = out.map(function(s){ return r.prefix + s; });
-  if(r.suffix) out = out.map(function(s){ return s + r.suffix; });
-  // 全小写在变体之后（两者同时启用时，最终结果为小写）
-  if(r.lower) out = out.map(function(s){ return s.toLowerCase(); });
-  // 去重：变体开启时按精确大小写（否则变体无意义），否则忽略大小写
-  const seen = Object.create(null);
-  const caseKey = r.varCase
-    ? function(s){ return s; }
-    : function(s){ return s.toLowerCase(); };
-  out = out.filter(function(s){
-    const k = caseKey(s); if(seen[k]) return false; seen[k] = 1; return true;
-  });
-  if(r.len) out = out.filter(function(s){ return s.length >= r.min && s.length <= r.max; });
-  if(r.regex){
-    let re = null;
-    try { re = new RegExp(r.regex); } catch (e) { toast('正则无效，已跳过该规则'); }
-    if(re) out = out.filter(function(s){ return re.test(s); });
-  }
-  if(r.blacklist.length){
-    const bl = r.blacklist.map(function(s){ return s.toLowerCase(); });
-    out = out.filter(function(s){ return bl.indexOf(s.toLowerCase()) < 0; });
-  }
-  if(r.sortLen) out = out.slice().sort(function(a, b){ return a.length - b.length; });
-  return out;
-}
-function updateDeStats(){
-  const raw = document.getElementById('deContent').value.split(/\r?\n/)
-    .map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
-  const seen = Object.create(null); let uniq = 0;
-  raw.forEach(function(x){ const k = x.toLowerCase(); if(!seen[k]){ seen[k] = 1; uniq++; } });
-  const processed = applyRules(raw, collectRules());
-  document.getElementById('deStats').textContent =
-    raw.length + ' / ' + uniq + ' / 规则后 ' + processed.length;
-}
-document.addEventListener('input', function(e){
-  if(e.target && (e.target.id === 'deContent' || e.target.id === 'rBlackText' || e.target.id === 'rRegexText' || e.target.id === 'rPrefixText' || e.target.id === 'rSuffixText' || e.target.id === 'rNumsText' || e.target.id === 'rMin' || e.target.id === 'rMax')) updateDeStats();
-});
+
+/* ---------- 弹层开关（原在损坏的第二 script 块，现移回） ---------- */
 function showSheet(id){
   document.getElementById('overlay').classList.add('show');
   document.getElementById(id).classList.add('show');
@@ -1568,7 +2211,7 @@ function closeSheet(id){
   document.getElementById('overlay').classList.remove('show');
 }
 
-/* ---------- 字典生成器（纯前端计算，保存走 save_dict） ---------- */
+/* ---------- 字典生成器（原在损坏的第二 script 块，现移回） ---------- */
 let GEN_RESULT = [];
 function genList(v){
   return (v || '').split(/[,，、]+/).map(function(s){ return s.trim(); }).filter(Boolean);
@@ -1597,25 +2240,17 @@ function runGenPreview(){
     if(out.length < limit) out.push(w);
   }
   bases.forEach(function(b){
-    const variants = useCase ? [b,
-      b.charAt(0).toUpperCase() + b.slice(1),
-      b.toUpperCase()] : [b];
+    const variants = useCase ? [b, b.charAt(0).toUpperCase() + b.slice(1), b.toUpperCase()] : [b];
     variants.forEach(function(v){
       push(v);
       if(useDigits){
         const seeds = vars.length ? vars : [''];
-        seeds.forEach(function(num){
-          push(v + num);
-          push(v + '_' + num);
-        });
+        seeds.forEach(function(num){ push(v + num); push(v + '_' + num); });
       }
       if(useLeet){
         const leet = genLeet(v);
         push(leet);
-        if(useDigits){
-          const seeds = vars.length ? vars : [''];
-          seeds.forEach(function(num){ push(leet + num); });
-        }
+        if(useDigits){ const seeds = vars.length ? vars : ['']; seeds.forEach(function(num){ push(leet + num); }); }
       }
     });
   });
@@ -1623,8 +2258,7 @@ function runGenPreview(){
   document.getElementById('genStats').textContent = out.length + ' / ' + Object.keys(seen).length;
   const box = document.getElementById('genPreview');
   box.innerHTML = out.length
-    ? out.slice(0, 50).map(escHtml).join('<br>')
-      + (out.length > 50 ? '<br>…（共 ' + out.length + ' 条，仅预览前 50）' : '')
+    ? out.slice(0, 50).map(escHtml).join('<br>') + (out.length > 50 ? '<br>…（共 ' + out.length + ' 条，仅预览前 50）' : '')
     : '（无结果：调整基础词 / 变量值 / 长度范围）';
 }
 function saveGenerated(){
@@ -1635,51 +2269,6 @@ function saveGenerated(){
   nativeSend('save_dict', {name: name, content: GEN_RESULT.join('\n'), desc: '生成器生成', enabled: true});
   toast('已保存为字典：' + name);
 }
-
-/* ---------- 日志页（真实数据） ---------- */
-function logCls(line){
-  if(/命中|TASK_SUCCESS|已成功|成功$/.test(line)) return 'ok';
-  if(/密码错误|密码不正确|超时|未找到|失败|REJECT|手动停止|TASK_END|结束/.test(line)) return 'fail';
-  return '';
-}
-function renderLogBox(id, lines){
-  const box = document.getElementById(id);
-  if(!lines || !lines.length){ box.innerHTML = '<div class="wl-empty">暂无</div>'; return; }
-  box.innerHTML = lines.map(function(l){
-    return '<div class="log-line ' + logCls(l) + '"><b>' + escHtml(l) + '</b></div>';
-  }).join('');
-}
-function renderLogs(data){
-  renderLogBox('logAudit', data && data.audit);
-  renderLogBox('logRuntime', data && data.runtime);
-}
-function refreshLogs(){
-  if(window.__AUTOX){ nativeSend('get_logs'); }
-  else {
-    // 浏览器预览：演示数据
-    renderLogs({
-      audit: ['[2026-11-19 05:00:00] APP_LAUNCH | 浏览器预览', '[2026-11-19 05:00:01] TASK_START | ssid=演示网络 maxAttempts=50'],
-      runtime: ['05:00:02 第 1 条 · 密码错误', '05:00:05 第 2 条 · 命中'],
-    });
-  }
-}
-function exportLogs(){
-  if(window.__AUTOX){ nativeSend('export_logs'); }
-  else { toast('浏览器预览无导出'); }
-}
-function clearRuntimeLog(){
-  openModal('清空运行日志', '将清空 runtime.log（不影响审计日志）。审计日志不可清空。', '清空', function(){
-    if(window.__AUTOX) nativeSend('clear_runtime_log');
-    else { renderLogs({ audit: [], runtime: [] }); toast('已清空'); }
-  });
-}
-
-/* ---------- 初始化 ---------- */
-document.querySelector('.tabbar button').classList.add('on');
-restoreCfg();
-renderWhitelist();
-if(window.__AUTOX) nativeSend('get_whitelist'); // 页面就绪后拉取原生权威白名单
-if(window.__AUTOX) nativeSend('get_history'); // 拉取任务历史
 </script>
 </body>
 </html>

@@ -7,6 +7,7 @@ const files = [
     'app/lib/wifi.js',
     'app/lib/connect.js',
     'app/lib/engine.js',
+    'app/lib/panel.js',
 ];
 let bad = 0;
 files.forEach(function (f) {

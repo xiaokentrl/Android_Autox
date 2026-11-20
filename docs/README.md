@@ -8,7 +8,8 @@
 - 目标网络白名单由使用者自行输入；输入即代表使用者声明该网络为其自有或已获书面授权
 - 本 App 仅限运营者自有设备使用，**不得对外分发**（不分发给客户/游客/第三方）
 - 合规层在代码级强制，UI 不可绕过：
-  - 尝试次数硬上限 50 次（`compliance.CAPS.MAX_ATTEMPTS`）
+  - 每目标尝试次数硬上限 50 次（`compliance.CAPS.MAX_ATTEMPTS`）
+  - 单任务目标数上限 20 个（`compliance.CAPS.MAX_TARGETS`），即单任务总尝试 ≤1000 次
   - 最小尝试间隔 1 秒（`compliance.CAPS.MIN_INTERVAL_SEC`）
   - SSID 不在白名单内直接拒绝执行
   - 审计日志强制记录（授权确认/任务起止/白名单变更/命中），不可关闭
@@ -40,11 +41,13 @@ E:\Android_Autox\                     PC 工作区
     │   ├── compliance.js              合规层（白名单/硬上限/审计）
     │   ├── dict.js                    字典加载/去重/候选序列
     │   ├── wifi.js                    附近 WiFi 扫描（白名单选择用）
-    │   └── engine.js                  轮询循环（attemptConnect 留桩）
+    │   ├── connect.js                 真实连接（无障碍自动化 WLAN）
+    │   ├── panel.js                   悬浮窗控制面板
+    │   └── engine.js                  轮询循环（调用 connect.js）
     ├── web\
     │   └── index.html                 全部 UI（原型改造，全屏版）
     ├── dicts\                         字典文件（txt 一行一条）
-    │   └── demo-test.txt              演示字典（20 条合成数据）
+    │   └── _demo\                     演示字典（不参与真实任务）
     └── data\                          运行时生成（勿手写）
         ├── config.json                持久化合规配置
         ├── audit.log                  审计日志（强制）
@@ -141,9 +144,10 @@ lib/engine.js   任务循环（间隔节流/上限/审计），attemptConnect �
 
 ## 自测
 
-- `node deploy/test-rules.js`：规则链 applyRules 8 用例（vm 沙箱，桩掉 DOM）
-- `node deploy/test-engine.js`：多目标引擎状态机 8 用例（合规拒绝/命中/双目标/continue/停止/暂停/空字典/进度归零）
-- `node deploy/check-exports.js`：模块导出完整性检查
+- `node deploy/test-rules.js`：规则链 applyRules 15 用例（vm 沙箱，桩掉 DOM）
+- `node deploy/test-engine.js`：多目标引擎状态机 9 用例（合规拒绝/命中/双目标/continue/停止/暂停/空字典/进度归零/控制回调下沉）
+- `node deploy/check-exports.js`：模块导出完整性检查（含 panel.js）
+- `node deploy/check-bridge.js`：桥接契约检查（UI nativeSend 命令必须有原生 handler）
 - 历史教训：engine.js 曾导出未定义的 isRunning（引用即崩），自测抓出
 
 ## 运维备忘（MIUI marble 实测）

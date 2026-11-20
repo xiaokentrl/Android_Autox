@@ -46,15 +46,18 @@ function dedupe(entries) {
 }
 
 /**
- * 取候选密码序列：按文件名顺序合并全部字典 → 去重 → 截断到 maxAttempts
- * （权重、启用开关、规则链留待后续版本接入设置页）
+ * 取候选密码序列：按文件名顺序合并指定字典 → 去重 → 截断到 maxAttempts
+ * @param maxAttempts 每目标最大尝试数
+ * @param dictNames 可选，本次任务参与的字典名数组；不传=全部启用字典
  */
-function candidates(maxAttempts) {
+function candidates(maxAttempts, dictNames) {
     const meta = store.load('dictmeta.json', {});
     const all = [];
+    const only = Array.isArray(dictNames) ? dictNames : null; // 传数组（含空数组）=按勾选过滤；不传=全部启用字典
     loadDicts().forEach(function (d) {
         const m = meta[d.name] || {};
         if (m.enabled === false) return; // 停用的字典不参与候选
+        if (only && only.indexOf(d.name) < 0) return; // 本次任务未勾选
         all.push.apply(all, d.entries);
     });
     return dedupe(all).slice(0, maxAttempts);

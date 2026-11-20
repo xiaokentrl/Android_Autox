@@ -20,9 +20,32 @@ const state = {
     pausedFlag: false,
 };
 
-/** 无障碍服务是否就绪（auto.root 未就绪时抛异常） */
+/**
+ * 执行用户脚本钩子（设置页「脚本钩子」）。
+ * 受控执行：语法/运行时错误只记日志，绝不影响任务主流程。
+ * 可用上下文变量（按阶段不同）：
+ *   start  : phase, targets（数组）, total
+ *   attempt: phase, target, pwd, tried
+ *   finish : phase, success, reason, hits（数组）, result（同 reason）
+ *   通用   : log(text) 写运行日志
+ */
+function runHook(cfg, key, ctx) {
+    const src = cfg && cfg.hooks && cfg.hooks[key];
+    if (!src || !String(src).trim()) return;
+    try {
+        const scope = Object.assign({}, ctx, {
+            log: function (t) { try { store.appendLine('runtime.log', new Date().toLocaleTimeString() + ' [hook] ' + t); } catch (e) {} },
+        });
+        const fn = new Function('ctx', 'with(ctx){ ' + src + '\n}');
+        fn(scope);
+    } catch (e) {
+        try { store.appendLine('runtime.log', new Date().toLocaleTimeString() + ' [hook错误] ' + key + ': ' + e); } catch (e2) {}
+    }
+}
+
+/** 无障碍服务是否就绪（auto.service 为 AutoX.js 无障碍服务实例） */
 function accessibilityReady() {
-    try { return !!(auto && auto.root); } catch (e) { return false; }
+    try { return !!(auto && auto.service); } catch (e) { return false; }
 }
 
 function start(cfg, hooks) {
@@ -48,7 +71,7 @@ function start(cfg, hooks) {
     const onHitContinue = cfg.onHit === 'continue';
 
     const intervalMs = Math.max(cfg.intervalSec | 0, compliance.CAPS.MIN_INTERVAL_SEC) * 1000;
-    const candidates = dict.candidates(cfg.maxAttempts);
+    const candidates = dict.candidates(cfg.maxAttempts, cfg.dictNames);
     if (candidates.length === 0) {
         hooks.onLog('字典为空，请在 dicts/ 目录放入字典文件', 'fail');
         hooks.onDone(false, '字典为空');
@@ -60,11 +83,14 @@ function start(cfg, hooks) {
     state.pausedFlag = false;
     state.skipFlag = false;
     cfg.skipCheck = function () { return state.skipFlag; };
+    cfg.stopCheck = function () { return state.stopFlag; };
+    cfg.pauseCheck = function () { return state.pausedFlag; };
     compliance.audit('TASK_START',
         'targets=[' + targets.join(', ') + '] maxAttempts=' + candidates.length
         + ' interval=' + intervalMs + 'ms onHit=' + (onHitContinue ? 'continue' : 'stop'));
     hooks.onLog('任务开始 · ' + targets.length + ' 个目标 · 每目标待试 '
         + candidates.length + ' 条');
+    runHook(cfg, 'onStart', { phase: 'start', targets: targets, total: candidates.length });
 
     let ti = 0;          // 当前目标下标
     let tried = 0;       // 当前目标已尝试条数
@@ -73,6 +99,8 @@ function start(cfg, hooks) {
 
     function finish(success, reason) {
         state.running = false;
+        try { connect.closeSession(); } catch (e) {} // 关闭可能残留的 WLAN 会话
+        runHook(cfg, 'onFinish', { phase: 'finish', success: success, reason: reason, result: reason, hits: hitTargets.slice() });
         compliance.audit(success ? 'TASK_SUCCESS' : 'TASK_END',
             reason + (hitTargets.length ? ' | 命中: ' + hitTargets.join(', ') : ''));
         hooks.onLog(success ? '任务成功结束' : '任务结束（' + reason + '）',
@@ -108,16 +136,18 @@ function start(cfg, hooks) {
 
         tried++;
         const pwd = candidates[tried - 1];
+        runHook(cfg, 'onAttempt', { phase: 'attempt', target: ssid, pwd: pwd, tried: tried });
+        // 尝试开始前就推送进度，避免连接阻塞几十秒期间界面卡在旧值
+        hooks.onProgress({ tried: tried, total: candidates.length, target: ssid, currentPwd: pwd, phase: 'trying' });
         const result = attemptConnect(ssid, pwd, cfg);
         if (state.skipFlag) state.skipFlag = false;
 
-        hooks.onProgress({ tried: tried, total: candidates.length, target: ssid });
         if (result === 'connected') {
             hooks.onProgress({ tried: tried, total: candidates.length, currentPwd: pwd, target: ssid });
             hooks.onLog('第 ' + tried + ' 条 · 命中（' + ssid + '）', 'ok');
             compliance.audit('HIT', 'ssid=' + ssid + ' 尝试序号=' + tried);
             hitTargets.push(ssid);
-            if (hooks.onHit) hooks.onHit(ssid);
+            if (hooks.onHit) hooks.onHit(ssid, pwd);
             if (!onHitContinue) { finish(true, '命中 ' + ssid); return; }
             hooks.onLog('命中后继续（按任务设置）', 'ok');
             ti++;
@@ -131,6 +161,10 @@ function start(cfg, hooks) {
             hooks.onLog('第 ' + tried + ' 条 · 已在系统保存列表（密码已知），跳过');
         } else if (result === 'skipped') {
             hooks.onLog('第 ' + tried + ' 条 · 用户跳过', 'fail');
+        } else if (result === 'stopped') {
+            hooks.onLog('第 ' + tried + ' 条 · 用户停止', 'fail');
+            finish(false, '手动停止');
+            return;
         } else {
             hooks.onLog('第 ' + tried + ' 条 · 密码错误', 'fail');
         }
@@ -138,6 +172,10 @@ function start(cfg, hooks) {
         const elapsedMin = (Date.now() - startedAt) / 60000;
         const speed = elapsedMin > 0 ? (tried / elapsedMin).toFixed(1) : '0';
         hooks.onProgress({ tried: tried, total: candidates.length, speed: speed, target: ssid });
+        if (result === 'skipped') {
+            setTimeout(function () { nextAttempt(ssid); }, 0);
+            return;
+        }
         setTimeout(function () { nextAttempt(ssid); }, intervalMs);
     }
 
