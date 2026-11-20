@@ -5,9 +5,15 @@
 #       bash deploy/push.sh --run       （显式自动启动，行为同默认）
 set -e
 
-ADB="/d/tools/微信web开发者工具/bin/adb-win/adb.exe"
+# adb 路径：优先用 PATH 里的，找不到再回退到 Windows Git Bash 的固定位置
+ADB="${ADB:-$(command -v adb || echo '/d/tools/微信web开发者工具/bin/adb-win/adb.exe')}"
 DEV="8d5ff92f"
-SRC="$(cygpath -w "$(cd "$(dirname "$0")/.." && pwd)/app")"
+ROOT_APP="$(cd "$(dirname "$0")/.." && pwd)/app"
+if command -v cygpath >/dev/null 2>&1; then
+    SRC="$(cygpath -w "$ROOT_APP")"   # Windows adb 需要 Windows 形式路径
+else
+    SRC="$ROOT_APP"
+fi
 DST="/sdcard/脚本/WiFi字典轮询器"
 PKG_ACTIVITY="org.autojs.autoxjs.v7/org.autojs.autojs.external.open.RunIntentActivity"
 LOG="$DST/data/bridge.log"

@@ -6,7 +6,8 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ADB="/d/tools/微信web开发者工具/bin/adb-win/adb.exe"
+# adb 路径：优先用 PATH 里的，找不到再回退到 Windows Git Bash 的固定位置
+ADB="${ADB:-$(command -v adb || echo '/d/tools/微信web开发者工具/bin/adb-win/adb.exe')}"
 DEV="8d5ff92f"
 PKG="org.autojs.autoxjs.v7"
 ACT="$PKG/org.autojs.autojs.external.open.RunIntentActivity"
